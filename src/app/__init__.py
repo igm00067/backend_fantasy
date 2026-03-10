@@ -1,16 +1,28 @@
 from flask import Flask
-from app.config import Config
-from app.extensions import db, cors, bcrypt, jwt
 from flask_cors import CORS
+from flask_jwt_extended import JWTManager
+from flask_socketio import SocketIO
+from app.extensions import db
+from datetime import timedelta
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 def create_app():
     app = Flask(__name__)
-    app.config.from_object(Config)
+    
+    # Configuración
+    app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
+    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'tu-clave-secreta-super-segura')
+    app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(days=7)
     
     # Inicializar extensiones
     db.init_app(app)
+    jwt = JWTManager(app)
     
-    # CORS mejorado - acepta Authorization header
+    # CORS
     CORS(app, resources={
         r"/api/*": {
             "origins": "*",
@@ -19,24 +31,27 @@ def create_app():
         }
     })
     
-    bcrypt.init_app(app)
-    jwt.init_app(app)
+    # Inicializar SocketIO
+    socketio = SocketIO(
+        app,
+        cors_allowed_origins="*",
+        async_mode='threading',
+        logger=True,
+        engineio_logger=True
+    )
     
-     # Manejadores de errores JWT - AÑADE ESTO
-    @jwt.unauthorized_loader
-    def unauthorized_callback(error_string):
-        print(f"JWT ERROR - Unauthorized: {error_string}")
-        return {'error': f'Token missing or invalid: {error_string}'}, 401
-    
+    # Manejadores de errores JWT
     @jwt.invalid_token_loader
-    def invalid_token_callback(error_string):
-        print(f"JWT ERROR - Invalid token: {error_string}")
-        return {'error': f'Invalid token: {error_string}'}, 422
-    
+    def invalid_token_callback(error):
+        return {'error': 'Token inválido', 'message': str(error)}, 401
+
+    @jwt.unauthorized_loader
+    def unauthorized_callback(error):
+        return {'error': 'No autorizado', 'message': str(error)}, 401
+
     @jwt.expired_token_loader
-    def expired_token_callback(jwt_header, jwt_data):
-        print(f"JWT ERROR - Expired token")
-        return {'error': 'Token has expired'}, 401
+    def expired_token_callback(jwt_header, jwt_payload):
+        return {'error': 'Token expirado', 'message': 'El token ha expirado'}, 401
     
     # Registrar blueprints
     from app.routes.usuarios import bp as usuarios_bp
@@ -46,6 +61,9 @@ def create_app():
     from app.routes.auth import bp as auth_bp
     from app.routes.ligas import bp as ligas_bp
     from app.routes.mercado import bp as mercado_bp
+    from app.routes.chat import bp as chat_bp
+    from app.models import conversacion, mensaje, oferta_jugador
+
     
     app.register_blueprint(usuarios_bp)
     app.register_blueprint(competiciones_bp)
@@ -54,10 +72,13 @@ def create_app():
     app.register_blueprint(auth_bp)
     app.register_blueprint(ligas_bp)
     app.register_blueprint(mercado_bp)
+    app.register_blueprint(chat_bp)
     
-    # Ruta raíz
-    @app.route('/')
-    def home():
-        return {'mensaje': 'API Flask funcionando correctamente'}
+    # Registrar socket handlers
+    from app import socket_handlers
+    socket_handlers.init_app(socketio)
     
-    return app
+    print("✅ Aplicación Flask configurada correctamente")
+    print("✅ SocketIO inicializado")
+    
+    return app, socketio

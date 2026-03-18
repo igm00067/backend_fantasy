@@ -3,6 +3,10 @@ from app.models.usuario import Usuario
 from app.extensions import db, bcrypt
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 
+from flask_pydantic import validate
+
+from app.schemas.auth import LoginRequest
+
 bp = Blueprint('auth', __name__, url_prefix='/api/auth')
 
 @bp.route('/register', methods=['POST'])
@@ -46,22 +50,19 @@ def register():
         return jsonify({'error': str(e)}), 500
 
 @bp.route('/login', methods=['POST'])
-def login():
+@validate()
+def login(
+    body: LoginRequest
+):
     try:
-        datos = request.get_json()
-        
-        # Validar campos
-        if not datos.get('email') or not datos.get('password'):
-            return jsonify({'error': 'Email y contraseña son requeridos'}), 400
-        
         # Buscar usuario
-        usuario = Usuario.query.filter_by(email=datos['email']).first()
+        usuario = Usuario.query.filter_by(email=body.email).first()
         
         if not usuario:
             return jsonify({'error': 'Credenciales inválidas'}), 401
         
         # Verificar contraseña
-        if not bcrypt.check_password_hash(usuario.password_hash, datos['password']):
+        if not bcrypt.check_password_hash(usuario.password_hash, body.password):
             return jsonify({'error': 'Credenciales inválidas'}), 401
         
         # Crear token JWT

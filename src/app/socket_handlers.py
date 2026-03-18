@@ -213,3 +213,31 @@ def init_app(socketio):
             print(f"ERROR saliendo de conversación: {e}")
 
     print("✅ Socket handlers registrados correctamente")
+    
+    
+    def emitir_oferta_creada(mensaje_data):
+        try:
+            conversacion_id = mensaje_data.get('conversacion_id')
+            remitente_id = mensaje_data.get('remitente_id')
+            
+            # Obtener la conversación para saber quién es el destinatario
+            from app.models.conversacion import Conversacion
+            conversacion = Conversacion.query.get(conversacion_id)
+            
+            if conversacion:
+                # Determinar destinatario
+                destinatario_id = conversacion.usuario2_id if conversacion.usuario1_id == remitente_id else conversacion.usuario1_id
+                
+                # Emitir a la sala del destinatario
+                socketio.emit('new_message', mensaje_data, room=f'user_{destinatario_id}')
+                
+                # Emitir confirmación al remitente
+                socketio.emit('message_sent', mensaje_data, room=f'user_{remitente_id}')
+                
+                print(f"📤 Oferta enviada: conversación {conversacion_id}")
+                print(f"   → Destinatario: user_{destinatario_id}")
+                print(f"   → Remitente: user_{remitente_id}")
+        except Exception as e:
+            print(f"❌ Error emitiendo oferta: {e}")
+            import traceback
+            traceback.print_exc()

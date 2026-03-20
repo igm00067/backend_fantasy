@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/ismae/OneDrive/Escritorio/flutter-projects/fantasy_football_manager/**)",
+      "Bash(dart analyze:*)",
+      "Bash(grep:*)",
+      "Bash(sed:*)"
+    ]
+  }
+}

@@ -6,13 +6,33 @@ from app.models.jugador import Jugador
 from app.models.usuario import Usuario
 
 def populate_database():
-    app = create_app()
-    
+    app, _ = create_app()
+
     with app.app_context():
-        print("🗑️  Limpiando datos existentes...")
+        print("Limpiando datos existentes...")
+        # Borrar en orden para respetar claves foraneas
+        from app.models.cambio_descanso import CambioDescanso
+        from app.models.evento_partido import EventoPartido
+        from app.models.plantilla_equipo import PlantillaEquipo
+        from app.models.partido import Partido
+        from app.models.jornada import Jornada
+        from app.models.confirmacion_inicio import ConfirmacionInicio
+        from app.models.participante_liga import ParticipanteLiga
+        from app.models.equipo_fantasy import EquipoFantasy
+        from app.models.liga_fantasy import LigaFantasy
+        CambioDescanso.query.delete()
+        EventoPartido.query.delete()
+        PlantillaEquipo.query.delete()
+        Partido.query.delete()
+        Jornada.query.delete()
+        ConfirmacionInicio.query.delete()
+        ParticipanteLiga.query.delete()
+        EquipoFantasy.query.delete()
+        LigaFantasy.query.delete()
         Jugador.query.delete()
         EquipoReal.query.delete()
         Competicion.query.delete()
+        db.session.commit()
         
         print("🏆 Creando competiciones...")
         
@@ -265,6 +285,580 @@ def populate_database():
                    velocidad=88, tiro=76, pase=78, regate=86, defensa=42, fisico=64, nacionalidad='Japón', edad=23),
         ])
         
+        # ========== PORTEROS ADICIONALES LALIGA ==========
+        jugadores.extend([
+            # REAL BETIS
+            Jugador(nombre='Rui Silva', equipo_real_id=betis.id, posicion='POR', precio=5.5,
+                   velocidad=52, tiro=14, pase=55, regate=24, defensa=46, fisico=83, nacionalidad='Portugal', edad=30),
+            Jugador(nombre='Fran Vieites', equipo_real_id=betis.id, posicion='POR', precio=3.0,
+                   velocidad=50, tiro=11, pase=42, regate=20, defensa=42, fisico=76, nacionalidad='España', edad=23),
+            # VILLARREAL CF
+            Jugador(nombre='Diego Conde', equipo_real_id=villarreal.id, posicion='POR', precio=4.5,
+                   velocidad=51, tiro=13, pase=50, regate=22, defensa=44, fisico=79, nacionalidad='España', edad=26),
+            Jugador(nombre='Pepe Reina', equipo_real_id=villarreal.id, posicion='POR', precio=2.5,
+                   velocidad=44, tiro=12, pase=52, regate=20, defensa=43, fisico=73, nacionalidad='España', edad=42),
+            # VALENCIA CF
+            Jugador(nombre='Giorgi Mamardashvili', equipo_real_id=valencia.id, posicion='POR', precio=7.5,
+                   velocidad=56, tiro=18, pase=62, regate=26, defensa=50, fisico=88, nacionalidad='Georgia', edad=23),
+            Jugador(nombre='Cristian Rivero', equipo_real_id=valencia.id, posicion='POR', precio=2.5,
+                   velocidad=48, tiro=11, pase=38, regate=19, defensa=40, fisico=74, nacionalidad='España', edad=27),
+            # SEVILLA FC
+            Jugador(nombre='Álvaro Fernández', equipo_real_id=sevilla.id, posicion='POR', precio=4.0,
+                   velocidad=52, tiro=13, pase=54, regate=23, defensa=44, fisico=79, nacionalidad='España', edad=23),
+            Jugador(nombre='Ørjan Nyland', equipo_real_id=sevilla.id, posicion='POR', precio=4.5,
+                   velocidad=49, tiro=12, pase=48, regate=21, defensa=45, fisico=82, nacionalidad='Noruega', edad=34),
+            # GIRONA FC
+            Jugador(nombre='Paulo Gazzaniga', equipo_real_id=girona.id, posicion='POR', precio=5.0,
+                   velocidad=53, tiro=14, pase=57, regate=24, defensa=46, fisico=83, nacionalidad='Argentina', edad=32),
+            Jugador(nombre='Iván Vila', equipo_real_id=girona.id, posicion='POR', precio=2.5,
+                   velocidad=47, tiro=11, pase=38, regate=19, defensa=40, fisico=73, nacionalidad='España', edad=25),
+            # RCD MALLORCA
+            Jugador(nombre='Predrag Rajković', equipo_real_id=mallorca.id, posicion='POR', precio=5.0,
+                   velocidad=52, tiro=13, pase=48, regate=22, defensa=44, fisico=80, nacionalidad='Serbia', edad=29),
+            Jugador(nombre='Leo Román', equipo_real_id=mallorca.id, posicion='POR', precio=3.0,
+                   velocidad=50, tiro=12, pase=42, regate=20, defensa=42, fisico=75, nacionalidad='España', edad=23),
+            # RAYO VALLECANO
+            Jugador(nombre='Stole Dimitrievski', equipo_real_id=rayo.id, posicion='POR', precio=5.0,
+                   velocidad=52, tiro=13, pase=50, regate=22, defensa=45, fisico=81, nacionalidad='Macedonia del Norte', edad=31),
+            Jugador(nombre='Iñaki Reyes', equipo_real_id=rayo.id, posicion='POR', precio=2.5,
+                   velocidad=48, tiro=11, pase=38, regate=19, defensa=40, fisico=72, nacionalidad='España', edad=24),
+            # CELTA DE VIGO
+            Jugador(nombre='Iván Villar', equipo_real_id=celta.id, posicion='POR', precio=5.0,
+                   velocidad=53, tiro=13, pase=52, regate=23, defensa=45, fisico=80, nacionalidad='España', edad=27),
+            Jugador(nombre='Vicente Guaita', equipo_real_id=celta.id, posicion='POR', precio=4.0,
+                   velocidad=48, tiro=12, pase=50, regate=22, defensa=44, fisico=79, nacionalidad='España', edad=37),
+            # CA OSASUNA
+            Jugador(nombre='Sergio Herrera', equipo_real_id=osasuna.id, posicion='POR', precio=5.5,
+                   velocidad=54, tiro=14, pase=56, regate=24, defensa=46, fisico=82, nacionalidad='España', edad=32),
+            Jugador(nombre='Juan Pérez', equipo_real_id=osasuna.id, posicion='POR', precio=2.5,
+                   velocidad=47, tiro=11, pase=36, regate=18, defensa=39, fisico=72, nacionalidad='España', edad=26),
+            # GETAFE CF
+            Jugador(nombre='David Soria', equipo_real_id=getafe.id, posicion='POR', precio=5.0,
+                   velocidad=51, tiro=13, pase=52, regate=22, defensa=45, fisico=81, nacionalidad='España', edad=31),
+            Jugador(nombre='Tomáš Dvořák', equipo_real_id=getafe.id, posicion='POR', precio=2.5,
+                   velocidad=48, tiro=11, pase=38, regate=19, defensa=40, fisico=73, nacionalidad='Chequia', edad=27),
+            # RCD ESPANYOL
+            Jugador(nombre='Joan García', equipo_real_id=espanyol.id, posicion='POR', precio=5.5,
+                   velocidad=54, tiro=14, pase=55, regate=23, defensa=46, fisico=81, nacionalidad='España', edad=23),
+            Jugador(nombre='Benjamin Lecomte', equipo_real_id=espanyol.id, posicion='POR', precio=3.5,
+                   velocidad=50, tiro=12, pase=48, regate=21, defensa=43, fisico=78, nacionalidad='Francia', edad=33),
+            # DEPORTIVO ALAVÉS
+            Jugador(nombre='Antonio Sivera', equipo_real_id=alaves.id, posicion='POR', precio=4.5,
+                   velocidad=51, tiro=13, pase=50, regate=22, defensa=44, fisico=80, nacionalidad='España', edad=28),
+            Jugador(nombre='Fernando Pacheco', equipo_real_id=alaves.id, posicion='POR', precio=3.0,
+                   velocidad=49, tiro=12, pase=44, regate=20, defensa=42, fisico=76, nacionalidad='España', edad=33),
+            # REAL VALLADOLID
+            Jugador(nombre='Jordi Masip', equipo_real_id=valladolid.id, posicion='POR', precio=3.5,
+                   velocidad=50, tiro=12, pase=48, regate=21, defensa=43, fisico=77, nacionalidad='España', edad=36),
+            Jugador(nombre='Karl Hein', equipo_real_id=valladolid.id, posicion='POR', precio=3.0,
+                   velocidad=52, tiro=12, pase=45, regate=21, defensa=43, fisico=76, nacionalidad='Estonia', edad=22),
+            # CD LEGANÉS
+            Jugador(nombre='Juan Soriano', equipo_real_id=leganes.id, posicion='POR', precio=3.5,
+                   velocidad=50, tiro=12, pase=46, regate=20, defensa=42, fisico=77, nacionalidad='España', edad=28),
+            Jugador(nombre='Pichu Atienza', equipo_real_id=leganes.id, posicion='POR', precio=2.5,
+                   velocidad=47, tiro=11, pase=38, regate=18, defensa=39, fisico=72, nacionalidad='España', edad=34),
+            # UD LAS PALMAS
+            Jugador(nombre='Jesús Owono', equipo_real_id=las_palmas.id, posicion='POR', precio=4.0,
+                   velocidad=53, tiro=13, pase=50, regate=22, defensa=44, fisico=79, nacionalidad='Guinea Ecuatorial', edad=24),
+            Jugador(nombre='Álvaro Valles', equipo_real_id=las_palmas.id, posicion='POR', precio=3.0,
+                   velocidad=50, tiro=12, pase=44, regate=20, defensa=42, fisico=75, nacionalidad='España', edad=27),
+        ])
+
+        # ========== REAL BETIS ==========
+        jugadores.extend([
+            # Defensas
+            Jugador(nombre='Marc Bartra', equipo_real_id=betis.id, posicion='DEF', precio=5.5,
+                   velocidad=72, tiro=55, pase=70, regate=65, defensa=81, fisico=78, nacionalidad='España', edad=33),
+            Jugador(nombre='Alex Moreno', equipo_real_id=betis.id, posicion='DEF', precio=6.0,
+                   velocidad=84, tiro=58, pase=72, regate=74, defensa=79, fisico=76, nacionalidad='España', edad=31),
+            Jugador(nombre='Youssouf Sabaly', equipo_real_id=betis.id, posicion='DEF', precio=5.5,
+                   velocidad=83, tiro=52, pase=68, regate=70, defensa=78, fisico=77, nacionalidad='Senegal', edad=32),
+            Jugador(nombre='Natan', equipo_real_id=betis.id, posicion='DEF', precio=5.0,
+                   velocidad=76, tiro=50, pase=65, regate=62, defensa=77, fisico=80, nacionalidad='Brasil', edad=23),
+            Jugador(nombre='Ricardo Rodriguez', equipo_real_id=betis.id, posicion='DEF', precio=4.5,
+                   velocidad=70, tiro=58, pase=70, regate=65, defensa=76, fisico=74, nacionalidad='Suiza', edad=32),
+            # Centrocampistas
+            Jugador(nombre='Isco', equipo_real_id=betis.id, posicion='MED', precio=7.0,
+                   velocidad=72, tiro=76, pase=86, regate=87, defensa=52, fisico=66, nacionalidad='España', edad=32),
+            Jugador(nombre='Giovani Lo Celso', equipo_real_id=betis.id, posicion='MED', precio=6.5,
+                   velocidad=78, tiro=76, pase=82, regate=84, defensa=62, fisico=70, nacionalidad='Argentina', edad=28),
+            Jugador(nombre='Pablo Fornals', equipo_real_id=betis.id, posicion='MED', precio=6.0,
+                   velocidad=80, tiro=74, pase=78, regate=80, defensa=60, fisico=72, nacionalidad='España', edad=28),
+            Jugador(nombre='William Carvalho', equipo_real_id=betis.id, posicion='MED', precio=5.5,
+                   velocidad=68, tiro=68, pase=76, regate=72, defensa=78, fisico=80, nacionalidad='Portugal', edad=32),
+            Jugador(nombre='Johnny Cardoso', equipo_real_id=betis.id, posicion='MED', precio=5.0,
+                   velocidad=74, tiro=66, pase=74, regate=72, defensa=74, fisico=76, nacionalidad='Estados Unidos', edad=23),
+            # Delanteros
+            Jugador(nombre='Ayoze Perez', equipo_real_id=betis.id, posicion='DEL', precio=6.5,
+                   velocidad=82, tiro=78, pase=76, regate=80, defensa=42, fisico=70, nacionalidad='España', edad=31),
+            Jugador(nombre='Borja Iglesias', equipo_real_id=betis.id, posicion='DEL', precio=6.0,
+                   velocidad=72, tiro=80, pase=68, regate=74, defensa=38, fisico=82, nacionalidad='España', edad=31),
+            Jugador(nombre='Abde Ezzalzouli', equipo_real_id=betis.id, posicion='DEL', precio=6.0,
+                   velocidad=90, tiro=74, pase=72, regate=84, defensa=34, fisico=68, nacionalidad='Marruecos', edad=23),
+        ])
+
+        # ========== VILLARREAL CF ==========
+        jugadores.extend([
+            # Defensas
+            Jugador(nombre='Juan Foyth', equipo_real_id=villarreal.id, posicion='DEF', precio=6.5,
+                   velocidad=80, tiro=56, pase=70, regate=68, defensa=80, fisico=78, nacionalidad='Argentina', edad=26),
+            Jugador(nombre='Eric Bailly', equipo_real_id=villarreal.id, posicion='DEF', precio=5.0,
+                   velocidad=78, tiro=50, pase=62, regate=64, defensa=78, fisico=82, nacionalidad='Costa de Marfil', edad=30),
+            Jugador(nombre='Alfonso Pedraza', equipo_real_id=villarreal.id, posicion='DEF', precio=5.5,
+                   velocidad=82, tiro=55, pase=70, regate=72, defensa=76, fisico=74, nacionalidad='España', edad=28),
+            Jugador(nombre='Kiko Femenia', equipo_real_id=villarreal.id, posicion='DEF', precio=4.5,
+                   velocidad=79, tiro=52, pase=66, regate=67, defensa=74, fisico=73, nacionalidad='España', edad=34),
+            Jugador(nombre='Sergi Cardona', equipo_real_id=villarreal.id, posicion='DEF', precio=5.0,
+                   velocidad=80, tiro=54, pase=68, regate=70, defensa=75, fisico=74, nacionalidad='España', edad=23),
+            # Centrocampistas
+            Jugador(nombre='Alex Baena', equipo_real_id=villarreal.id, posicion='MED', precio=8.0,
+                   velocidad=86, tiro=78, pase=82, regate=86, defensa=58, fisico=70, nacionalidad='España', edad=23),
+            Jugador(nombre='Dani Parejo', equipo_real_id=villarreal.id, posicion='MED', precio=6.5,
+                   velocidad=68, tiro=74, pase=86, regate=80, defensa=70, fisico=70, nacionalidad='España', edad=35),
+            Jugador(nombre='Yeremy Pino', equipo_real_id=villarreal.id, posicion='MED', precio=7.0,
+                   velocidad=87, tiro=76, pase=76, regate=82, defensa=48, fisico=72, nacionalidad='España', edad=22),
+            Jugador(nombre='Francis Coquelin', equipo_real_id=villarreal.id, posicion='MED', precio=5.0,
+                   velocidad=72, tiro=64, pase=74, regate=70, defensa=78, fisico=76, nacionalidad='Francia', edad=33),
+            Jugador(nombre='Nicolas Pepe', equipo_real_id=villarreal.id, posicion='MED', precio=5.5,
+                   velocidad=88, tiro=76, pase=72, regate=84, defensa=44, fisico=70, nacionalidad='Costa de Marfil', edad=29),
+            # Delanteros
+            Jugador(nombre='Gerard Moreno', equipo_real_id=villarreal.id, posicion='DEL', precio=7.5,
+                   velocidad=78, tiro=84, pase=74, regate=80, defensa=42, fisico=76, nacionalidad='España', edad=32),
+            Jugador(nombre='Thierno Barry', equipo_real_id=villarreal.id, posicion='DEL', precio=5.5,
+                   velocidad=84, tiro=78, pase=66, regate=78, defensa=34, fisico=80, nacionalidad='Guinea', edad=22),
+            Jugador(nombre='Ilias Akhomach', equipo_real_id=villarreal.id, posicion='DEL', precio=5.5,
+                   velocidad=89, tiro=72, pase=70, regate=82, defensa=32, fisico=66, nacionalidad='Marruecos', edad=20),
+        ])
+
+        # ========== VALENCIA CF ==========
+        jugadores.extend([
+            # Defensas
+            Jugador(nombre='Jose Gaya', equipo_real_id=valencia.id, posicion='DEF', precio=6.5,
+                   velocidad=82, tiro=60, pase=74, regate=75, defensa=78, fisico=73, nacionalidad='España', edad=29),
+            Jugador(nombre='Thierry Correia', equipo_real_id=valencia.id, posicion='DEF', precio=5.5,
+                   velocidad=84, tiro=54, pase=68, regate=70, defensa=76, fisico=76, nacionalidad='Portugal', edad=25),
+            Jugador(nombre='Cristhian Mosquera', equipo_real_id=valencia.id, posicion='DEF', precio=5.0,
+                   velocidad=76, tiro=52, pase=66, regate=64, defensa=78, fisico=80, nacionalidad='España', edad=20),
+            Jugador(nombre='Cesar Tarrega', equipo_real_id=valencia.id, posicion='DEF', precio=4.5,
+                   velocidad=74, tiro=50, pase=64, regate=62, defensa=76, fisico=78, nacionalidad='España', edad=20),
+            Jugador(nombre='Dimitri Foulquier', equipo_real_id=valencia.id, posicion='DEF', precio=4.5,
+                   velocidad=80, tiro=52, pase=65, regate=66, defensa=74, fisico=75, nacionalidad='Guadalupe', edad=31),
+            # Centrocampistas
+            Jugador(nombre='Pepelu', equipo_real_id=valencia.id, posicion='MED', precio=6.0,
+                   velocidad=76, tiro=72, pase=80, regate=76, defensa=72, fisico=76, nacionalidad='España', edad=24),
+            Jugador(nombre='Hugo Guillamons', equipo_real_id=valencia.id, posicion='MED', precio=5.5,
+                   velocidad=74, tiro=66, pase=76, regate=74, defensa=74, fisico=74, nacionalidad='España', edad=22),
+            Jugador(nombre='Luis Rioja', equipo_real_id=valencia.id, posicion='MED', precio=5.5,
+                   velocidad=84, tiro=72, pase=74, regate=79, defensa=54, fisico=70, nacionalidad='España', edad=29),
+            Jugador(nombre='Javi Guerra', equipo_real_id=valencia.id, posicion='MED', precio=5.5,
+                   velocidad=78, tiro=70, pase=76, regate=76, defensa=68, fisico=74, nacionalidad='España', edad=22),
+            Jugador(nombre='Andre Almeida', equipo_real_id=valencia.id, posicion='MED', precio=4.5,
+                   velocidad=76, tiro=64, pase=72, regate=72, defensa=66, fisico=72, nacionalidad='Portugal', edad=25),
+            # Delanteros
+            Jugador(nombre='Hugo Duro', equipo_real_id=valencia.id, posicion='DEL', precio=6.5,
+                   velocidad=80, tiro=80, pase=68, regate=76, defensa=38, fisico=80, nacionalidad='España', edad=24),
+            Jugador(nombre='Dani Gomez', equipo_real_id=valencia.id, posicion='DEL', precio=5.0,
+                   velocidad=82, tiro=76, pase=68, regate=76, defensa=36, fisico=72, nacionalidad='España', edad=26),
+            Jugador(nombre='Sergi Canos', equipo_real_id=valencia.id, posicion='DEL', precio=5.0,
+                   velocidad=86, tiro=72, pase=70, regate=80, defensa=34, fisico=68, nacionalidad='España', edad=27),
+        ])
+
+        # ========== SEVILLA FC ==========
+        jugadores.extend([
+            # Defensas
+            Jugador(nombre='Sergio Ramos', equipo_real_id=sevilla.id, posicion='DEF', precio=6.0,
+                   velocidad=70, tiro=68, pase=72, regate=68, defensa=82, fisico=80, nacionalidad='España', edad=38),
+            Jugador(nombre='Jesus Navas', equipo_real_id=sevilla.id, posicion='DEF', precio=4.5,
+                   velocidad=82, tiro=52, pase=68, regate=72, defensa=73, fisico=68, nacionalidad='España', edad=39),
+            Jugador(nombre='Marcos Acuna', equipo_real_id=sevilla.id, posicion='DEF', precio=5.5,
+                   velocidad=80, tiro=58, pase=72, regate=74, defensa=77, fisico=76, nacionalidad='Argentina', edad=32),
+            Jugador(nombre='Kike Salas', equipo_real_id=sevilla.id, posicion='DEF', precio=5.0,
+                   velocidad=74, tiro=52, pase=66, regate=64, defensa=78, fisico=78, nacionalidad='España', edad=22),
+            Jugador(nombre='Adria Pedrosa', equipo_real_id=sevilla.id, posicion='DEF', precio=5.0,
+                   velocidad=80, tiro=54, pase=70, regate=72, defensa=75, fisico=72, nacionalidad='España', edad=26),
+            # Centrocampistas
+            Jugador(nombre='Ivan Rakitic', equipo_real_id=sevilla.id, posicion='MED', precio=6.5,
+                   velocidad=72, tiro=76, pase=84, regate=82, defensa=72, fisico=72, nacionalidad='Croacia', edad=36),
+            Jugador(nombre='Lucas Ocampos', equipo_real_id=sevilla.id, posicion='MED', precio=7.0,
+                   velocidad=88, tiro=76, pase=76, regate=80, defensa=62, fisico=82, nacionalidad='Argentina', edad=30),
+            Jugador(nombre='Joan Jordan', equipo_real_id=sevilla.id, posicion='MED', precio=5.5,
+                   velocidad=74, tiro=70, pase=76, regate=74, defensa=72, fisico=74, nacionalidad='España', edad=30),
+            Jugador(nombre='Nemanja Gudelj', equipo_real_id=sevilla.id, posicion='MED', precio=5.0,
+                   velocidad=68, tiro=66, pase=74, regate=70, defensa=76, fisico=78, nacionalidad='Serbia', edad=32),
+            Jugador(nombre='Djibril Sow', equipo_real_id=sevilla.id, posicion='MED', precio=5.5,
+                   velocidad=76, tiro=68, pase=74, regate=72, defensa=72, fisico=78, nacionalidad='Suiza', edad=27),
+            # Delanteros
+            Jugador(nombre='Isaac Romero', equipo_real_id=sevilla.id, posicion='DEL', precio=6.0,
+                   velocidad=78, tiro=78, pase=66, regate=74, defensa=36, fisico=80, nacionalidad='España', edad=23),
+            Jugador(nombre='Juanlu Sanchez', equipo_real_id=sevilla.id, posicion='DEL', precio=5.5,
+                   velocidad=88, tiro=72, pase=70, regate=78, defensa=38, fisico=70, nacionalidad='España', edad=22),
+            Jugador(nombre='Chidera Ejuke', equipo_real_id=sevilla.id, posicion='DEL', precio=5.0,
+                   velocidad=90, tiro=70, pase=68, regate=82, defensa=32, fisico=68, nacionalidad='Nigeria', edad=27),
+        ])
+
+        # ========== GIRONA FC ==========
+        jugadores.extend([
+            # Defensas
+            Jugador(nombre='Daley Blind', equipo_real_id=girona.id, posicion='DEF', precio=5.5,
+                   velocidad=70, tiro=58, pase=74, regate=68, defensa=79, fisico=72, nacionalidad='Países Bajos', edad=34),
+            Jugador(nombre='David Lopez', equipo_real_id=girona.id, posicion='DEF', precio=5.0,
+                   velocidad=68, tiro=52, pase=66, regate=62, defensa=78, fisico=76, nacionalidad='España', edad=34),
+            Jugador(nombre='Miguel Gutierrez', equipo_real_id=girona.id, posicion='DEF', precio=6.0,
+                   velocidad=84, tiro=56, pase=70, regate=72, defensa=76, fisico=74, nacionalidad='España', edad=23),
+            Jugador(nombre='Yan Couto', equipo_real_id=girona.id, posicion='DEF', precio=6.0,
+                   velocidad=86, tiro=58, pase=68, regate=72, defensa=75, fisico=74, nacionalidad='Brasil', edad=22),
+            Jugador(nombre='Ladislav Krejci', equipo_real_id=girona.id, posicion='DEF', precio=5.0,
+                   velocidad=74, tiro=50, pase=66, regate=64, defensa=77, fisico=78, nacionalidad='Chequia', edad=23),
+            # Centrocampistas
+            Jugador(nombre='Aleix Garcia', equipo_real_id=girona.id, posicion='MED', precio=7.5,
+                   velocidad=74, tiro=72, pase=84, regate=80, defensa=74, fisico=74, nacionalidad='España', edad=27),
+            Jugador(nombre='Viktor Tsygankov', equipo_real_id=girona.id, posicion='MED', precio=6.0,
+                   velocidad=84, tiro=76, pase=76, regate=82, defensa=52, fisico=70, nacionalidad='Ucrania', edad=26),
+            Jugador(nombre='Oriol Romeu', equipo_real_id=girona.id, posicion='MED', precio=5.0,
+                   velocidad=68, tiro=64, pase=74, regate=70, defensa=76, fisico=76, nacionalidad='España', edad=33),
+            Jugador(nombre='Ivan Martin', equipo_real_id=girona.id, posicion='MED', precio=5.5,
+                   velocidad=76, tiro=72, pase=76, regate=78, defensa=60, fisico=72, nacionalidad='España', edad=23),
+            Jugador(nombre='Oscar Tudela', equipo_real_id=girona.id, posicion='MED', precio=4.5,
+                   velocidad=74, tiro=66, pase=72, regate=74, defensa=62, fisico=70, nacionalidad='España', edad=22),
+            # Delanteros
+            Jugador(nombre='Cristhian Stuani', equipo_real_id=girona.id, posicion='DEL', precio=6.0,
+                   velocidad=76, tiro=80, pase=66, regate=72, defensa=40, fisico=80, nacionalidad='Uruguay', edad=37),
+            Jugador(nombre='Abel Ruiz', equipo_real_id=girona.id, posicion='DEL', precio=6.0,
+                   velocidad=78, tiro=78, pase=70, regate=76, defensa=36, fisico=76, nacionalidad='España', edad=24),
+            Jugador(nombre='Valery Fernandez', equipo_real_id=girona.id, posicion='DEL', precio=5.0,
+                   velocidad=86, tiro=72, pase=68, regate=80, defensa=32, fisico=66, nacionalidad='España', edad=21),
+        ])
+
+        # ========== RCD MALLORCA ==========
+        jugadores.extend([
+            # Defensas
+            Jugador(nombre='Antonio Raillo', equipo_real_id=mallorca.id, posicion='DEF', precio=5.5,
+                   velocidad=70, tiro=54, pase=66, regate=62, defensa=80, fisico=80, nacionalidad='España', edad=31),
+            Jugador(nombre='Javi Sanchez', equipo_real_id=mallorca.id, posicion='DEF', precio=5.0,
+                   velocidad=72, tiro=52, pase=65, regate=62, defensa=78, fisico=77, nacionalidad='España', edad=27),
+            Jugador(nombre='Pablo Maffeo', equipo_real_id=mallorca.id, posicion='DEF', precio=5.5,
+                   velocidad=82, tiro=52, pase=66, regate=68, defensa=76, fisico=76, nacionalidad='España', edad=27),
+            Jugador(nombre='Johan Mojica', equipo_real_id=mallorca.id, posicion='DEF', precio=5.0,
+                   velocidad=82, tiro=54, pase=68, regate=70, defensa=74, fisico=74, nacionalidad='Colombia', edad=32),
+            Jugador(nombre='Martin Valjent', equipo_real_id=mallorca.id, posicion='DEF', precio=4.5,
+                   velocidad=70, tiro=50, pase=63, regate=60, defensa=77, fisico=78, nacionalidad='Eslovaquia', edad=28),
+            # Centrocampistas
+            Jugador(nombre='Dani Rodriguez', equipo_real_id=mallorca.id, posicion='MED', precio=5.5,
+                   velocidad=78, tiro=72, pase=76, regate=76, defensa=64, fisico=74, nacionalidad='España', edad=33),
+            Jugador(nombre='Antonio Sanchez', equipo_real_id=mallorca.id, posicion='MED', precio=5.0,
+                   velocidad=76, tiro=68, pase=74, regate=72, defensa=70, fisico=74, nacionalidad='España', edad=26),
+            Jugador(nombre='Samu Costa', equipo_real_id=mallorca.id, posicion='MED', precio=5.0,
+                   velocidad=74, tiro=66, pase=74, regate=72, defensa=70, fisico=76, nacionalidad='Portugal', edad=24),
+            Jugador(nombre='Salva Sevilla', equipo_real_id=mallorca.id, posicion='MED', precio=4.0,
+                   velocidad=68, tiro=68, pase=76, regate=74, defensa=66, fisico=68, nacionalidad='España', edad=39),
+            Jugador(nombre='Mateu Morey', equipo_real_id=mallorca.id, posicion='MED', precio=4.5,
+                   velocidad=82, tiro=64, pase=68, regate=74, defensa=56, fisico=70, nacionalidad='España', edad=24),
+            # Delanteros
+            Jugador(nombre='Vedat Muriqi', equipo_real_id=mallorca.id, posicion='DEL', precio=7.0,
+                   velocidad=74, tiro=82, pase=64, regate=72, defensa=40, fisico=86, nacionalidad='Kosovo', edad=30),
+            Jugador(nombre='Abdon Prats', equipo_real_id=mallorca.id, posicion='DEL', precio=5.0,
+                   velocidad=76, tiro=76, pase=66, regate=72, defensa=36, fisico=74, nacionalidad='España', edad=32),
+            Jugador(nombre='Cyle Larin', equipo_real_id=mallorca.id, posicion='DEL', precio=5.5,
+                   velocidad=80, tiro=78, pase=62, regate=72, defensa=36, fisico=82, nacionalidad='Canadá', edad=29),
+        ])
+
+        # ========== RAYO VALLECANO ==========
+        jugadores.extend([
+            # Defensas
+            Jugador(nombre='Florian Lejeune', equipo_real_id=rayo.id, posicion='DEF', precio=5.0,
+                   velocidad=70, tiro=52, pase=66, regate=62, defensa=79, fisico=80, nacionalidad='Francia', edad=33),
+            Jugador(nombre='Alejandro Catena', equipo_real_id=rayo.id, posicion='DEF', precio=4.5,
+                   velocidad=72, tiro=50, pase=64, regate=62, defensa=77, fisico=78, nacionalidad='España', edad=28),
+            Jugador(nombre='Ivan Balliu', equipo_real_id=rayo.id, posicion='DEF', precio=4.5,
+                   velocidad=80, tiro=52, pase=65, regate=66, defensa=74, fisico=74, nacionalidad='Albania', edad=31),
+            Jugador(nombre='Ratiu', equipo_real_id=rayo.id, posicion='DEF', precio=4.5,
+                   velocidad=82, tiro=52, pase=65, regate=66, defensa=73, fisico=74, nacionalidad='Rumanía', edad=27),
+            Jugador(nombre='Jordi Amat', equipo_real_id=rayo.id, posicion='DEF', precio=4.0,
+                   velocidad=68, tiro=50, pase=63, regate=60, defensa=76, fisico=76, nacionalidad='España', edad=33),
+            # Centrocampistas
+            Jugador(nombre='Isi Palazon', equipo_real_id=rayo.id, posicion='MED', precio=6.5,
+                   velocidad=84, tiro=76, pase=76, regate=82, defensa=52, fisico=70, nacionalidad='España', edad=29),
+            Jugador(nombre='Alvaro Garcia', equipo_real_id=rayo.id, posicion='MED', precio=6.0,
+                   velocidad=86, tiro=74, pase=72, regate=80, defensa=50, fisico=70, nacionalidad='España', edad=31),
+            Jugador(nombre='Oscar Trejo', equipo_real_id=rayo.id, posicion='MED', precio=5.0,
+                   velocidad=72, tiro=74, pase=80, regate=78, defensa=60, fisico=66, nacionalidad='Argentina', edad=36),
+            Jugador(nombre='Unai Lopez', equipo_real_id=rayo.id, posicion='MED', precio=5.5,
+                   velocidad=74, tiro=70, pase=76, regate=76, defensa=66, fisico=72, nacionalidad='España', edad=28),
+            Jugador(nombre='Sergio Camello', equipo_real_id=rayo.id, posicion='MED', precio=5.0,
+                   velocidad=80, tiro=72, pase=70, regate=76, defensa=52, fisico=70, nacionalidad='España', edad=22),
+            # Delanteros
+            Jugador(nombre='Raul de Tomas', equipo_real_id=rayo.id, posicion='DEL', precio=6.5,
+                   velocidad=76, tiro=82, pase=70, regate=76, defensa=40, fisico=76, nacionalidad='España', edad=30),
+            Jugador(nombre='Jorge de Frutos', equipo_real_id=rayo.id, posicion='DEL', precio=5.5,
+                   velocidad=86, tiro=74, pase=70, regate=80, defensa=36, fisico=68, nacionalidad='España', edad=27),
+            Jugador(nombre='Randy Nteka', equipo_real_id=rayo.id, posicion='DEL', precio=5.0,
+                   velocidad=84, tiro=72, pase=66, regate=76, defensa=34, fisico=72, nacionalidad='Congo', edad=26),
+        ])
+
+        # ========== CELTA DE VIGO ==========
+        jugadores.extend([
+            # Defensas
+            Jugador(nombre='Joseph Aidoo', equipo_real_id=celta.id, posicion='DEF', precio=5.5,
+                   velocidad=76, tiro=52, pase=66, regate=64, defensa=80, fisico=82, nacionalidad='Ghana', edad=28),
+            Jugador(nombre='Unai Nunez', equipo_real_id=celta.id, posicion='DEF', precio=5.0,
+                   velocidad=72, tiro=52, pase=66, regate=62, defensa=78, fisico=78, nacionalidad='España', edad=27),
+            Jugador(nombre='Oscar Mingueza', equipo_real_id=celta.id, posicion='DEF', precio=5.5,
+                   velocidad=80, tiro=56, pase=70, regate=70, defensa=76, fisico=74, nacionalidad='España', edad=25),
+            Jugador(nombre='Manu Sanchez', equipo_real_id=celta.id, posicion='DEF', precio=5.0,
+                   velocidad=80, tiro=54, pase=68, regate=68, defensa=74, fisico=74, nacionalidad='España', edad=23),
+            Jugador(nombre='Hugo Alvarez', equipo_real_id=celta.id, posicion='DEF', precio=4.0,
+                   velocidad=74, tiro=50, pase=64, regate=62, defensa=74, fisico=74, nacionalidad='España', edad=22),
+            # Centrocampistas
+            Jugador(nombre='Carles Perez', equipo_real_id=celta.id, posicion='MED', precio=6.0,
+                   velocidad=84, tiro=74, pase=74, regate=80, defensa=52, fisico=68, nacionalidad='España', edad=26),
+            Jugador(nombre='Fran Beltran', equipo_real_id=celta.id, posicion='MED', precio=5.5,
+                   velocidad=72, tiro=68, pase=78, regate=74, defensa=72, fisico=72, nacionalidad='España', edad=26),
+            Jugador(nombre='Williot Swedberg', equipo_real_id=celta.id, posicion='MED', precio=5.5,
+                   velocidad=82, tiro=70, pase=72, regate=78, defensa=54, fisico=70, nacionalidad='Suecia', edad=21),
+            Jugador(nombre='Mihailo Ristic', equipo_real_id=celta.id, posicion='MED', precio=4.5,
+                   velocidad=78, tiro=60, pase=68, regate=70, defensa=66, fisico=72, nacionalidad='Serbia', edad=29),
+            Jugador(nombre='Tanis Rodriguez', equipo_real_id=celta.id, posicion='MED', precio=4.0,
+                   velocidad=72, tiro=62, pase=70, regate=68, defensa=64, fisico=70, nacionalidad='España', edad=25),
+            # Delanteros
+            Jugador(nombre='Iago Aspas', equipo_real_id=celta.id, posicion='DEL', precio=9.0,
+                   velocidad=82, tiro=86, pase=82, regate=88, defensa=48, fisico=70, nacionalidad='España', edad=37),
+            Jugador(nombre='Anastasios Douvikas', equipo_real_id=celta.id, posicion='DEL', precio=5.5,
+                   velocidad=78, tiro=78, pase=64, regate=72, defensa=36, fisico=82, nacionalidad='Grecia', edad=24),
+            Jugador(nombre='Larsen Toure', equipo_real_id=celta.id, posicion='DEL', precio=5.0,
+                   velocidad=86, tiro=72, pase=64, regate=76, defensa=32, fisico=70, nacionalidad='Guinea', edad=22),
+        ])
+
+        # ========== CA OSASUNA ==========
+        jugadores.extend([
+            # Defensas
+            Jugador(nombre='David Garcia', equipo_real_id=osasuna.id, posicion='DEF', precio=6.0,
+                   velocidad=72, tiro=56, pase=68, regate=64, defensa=82, fisico=80, nacionalidad='España', edad=30),
+            Jugador(nombre='Nacho Vidal', equipo_real_id=osasuna.id, posicion='DEF', precio=5.0,
+                   velocidad=80, tiro=52, pase=66, regate=68, defensa=76, fisico=74, nacionalidad='España', edad=32),
+            Jugador(nombre='Juan Cruz', equipo_real_id=osasuna.id, posicion='DEF', precio=5.0,
+                   velocidad=80, tiro=54, pase=68, regate=70, defensa=75, fisico=74, nacionalidad='España', edad=26),
+            Jugador(nombre='Unai Garcia', equipo_real_id=osasuna.id, posicion='DEF', precio=4.5,
+                   velocidad=70, tiro=52, pase=64, regate=62, defensa=77, fisico=78, nacionalidad='España', edad=31),
+            Jugador(nombre='Jorge Herrando', equipo_real_id=osasuna.id, posicion='DEF', precio=4.0,
+                   velocidad=72, tiro=50, pase=63, regate=60, defensa=75, fisico=76, nacionalidad='España', edad=23),
+            # Centrocampistas
+            Jugador(nombre='Lucas Torro', equipo_real_id=osasuna.id, posicion='MED', precio=5.5,
+                   velocidad=70, tiro=66, pase=74, regate=70, defensa=76, fisico=78, nacionalidad='España', edad=30),
+            Jugador(nombre='Ruben Garcia', equipo_real_id=osasuna.id, posicion='MED', precio=6.0,
+                   velocidad=82, tiro=74, pase=76, regate=80, defensa=58, fisico=70, nacionalidad='España', edad=30),
+            Jugador(nombre='Aimar Oroz', equipo_real_id=osasuna.id, posicion='MED', precio=5.5,
+                   velocidad=74, tiro=70, pase=78, regate=76, defensa=62, fisico=72, nacionalidad='España', edad=22),
+            Jugador(nombre='Jon Moncayola', equipo_real_id=osasuna.id, posicion='MED', precio=5.0,
+                   velocidad=72, tiro=68, pase=74, regate=72, defensa=70, fisico=74, nacionalidad='España', edad=26),
+            Jugador(nombre='Darko Brasanac', equipo_real_id=osasuna.id, posicion='MED', precio=4.5,
+                   velocidad=68, tiro=66, pase=74, regate=70, defensa=72, fisico=74, nacionalidad='Serbia', edad=33),
+            # Delanteros
+            Jugador(nombre='Ante Budimir', equipo_real_id=osasuna.id, posicion='DEL', precio=7.0,
+                   velocidad=72, tiro=82, pase=64, regate=70, defensa=38, fisico=86, nacionalidad='Croacia', edad=33),
+            Jugador(nombre='Ezequiel Avila', equipo_real_id=osasuna.id, posicion='DEL', precio=5.5,
+                   velocidad=84, tiro=76, pase=66, regate=78, defensa=34, fisico=72, nacionalidad='Argentina', edad=23),
+            Jugador(nombre='Kike Garcia', equipo_real_id=osasuna.id, posicion='DEL', precio=5.0,
+                   velocidad=74, tiro=76, pase=62, regate=68, defensa=36, fisico=80, nacionalidad='España', edad=35),
+        ])
+
+        # ========== GETAFE CF ==========
+        jugadores.extend([
+            # Defensas
+            Jugador(nombre='Djene Dakonam', equipo_real_id=getafe.id, posicion='DEF', precio=5.5,
+                   velocidad=76, tiro=52, pase=64, regate=64, defensa=80, fisico=80, nacionalidad='Togo', edad=32),
+            Jugador(nombre='Stefan Mitrovic', equipo_real_id=getafe.id, posicion='DEF', precio=5.0,
+                   velocidad=72, tiro=50, pase=64, regate=62, defensa=78, fisico=78, nacionalidad='Serbia', edad=32),
+            Jugador(nombre='Gaston Alvarez', equipo_real_id=getafe.id, posicion='DEF', precio=5.0,
+                   velocidad=78, tiro=52, pase=66, regate=64, defensa=76, fisico=76, nacionalidad='Uruguay', edad=24),
+            Jugador(nombre='Jorge Cuenca', equipo_real_id=getafe.id, posicion='DEF', precio=4.5,
+                   velocidad=72, tiro=50, pase=64, regate=62, defensa=76, fisico=76, nacionalidad='España', edad=26),
+            Jugador(nombre='Juan Iglesias', equipo_real_id=getafe.id, posicion='DEF', precio=4.0,
+                   velocidad=76, tiro=50, pase=63, regate=62, defensa=74, fisico=74, nacionalidad='España', edad=24),
+            # Centrocampistas
+            Jugador(nombre='Mauro Arambarri', equipo_real_id=getafe.id, posicion='MED', precio=6.0,
+                   velocidad=74, tiro=68, pase=74, regate=72, defensa=78, fisico=80, nacionalidad='Uruguay', edad=29),
+            Jugador(nombre='Oscar Rodriguez', equipo_real_id=getafe.id, posicion='MED', precio=6.0,
+                   velocidad=78, tiro=76, pase=78, regate=78, defensa=62, fisico=70, nacionalidad='España', edad=26),
+            Jugador(nombre='Nemanja Maksimovic', equipo_real_id=getafe.id, posicion='MED', precio=5.0,
+                   velocidad=70, tiro=64, pase=72, regate=68, defensa=74, fisico=76, nacionalidad='Serbia', edad=28),
+            Jugador(nombre='Carles Alena', equipo_real_id=getafe.id, posicion='MED', precio=5.5,
+                   velocidad=74, tiro=68, pase=78, regate=76, defensa=62, fisico=68, nacionalidad='España', edad=26),
+            Jugador(nombre='Luis Milla', equipo_real_id=getafe.id, posicion='MED', precio=4.5,
+                   velocidad=70, tiro=64, pase=72, regate=70, defensa=68, fisico=70, nacionalidad='España', edad=29),
+            # Delanteros
+            Jugador(nombre='Mason Greenwood', equipo_real_id=getafe.id, posicion='DEL', precio=8.0,
+                   velocidad=88, tiro=82, pase=74, regate=86, defensa=38, fisico=76, nacionalidad='Inglaterra', edad=23),
+            Jugador(nombre='Borja Mayoral', equipo_real_id=getafe.id, posicion='DEL', precio=6.5,
+                   velocidad=76, tiro=80, pase=70, regate=76, defensa=38, fisico=76, nacionalidad='España', edad=27),
+            Jugador(nombre='Jaime Mata', equipo_real_id=getafe.id, posicion='DEL', precio=4.5,
+                   velocidad=70, tiro=76, pase=64, regate=68, defensa=36, fisico=74, nacionalidad='España', edad=36),
+        ])
+
+        # ========== RCD ESPANYOL ==========
+        jugadores.extend([
+            # Defensas
+            Jugador(nombre='Leandro Cabrera', equipo_real_id=espanyol.id, posicion='DEF', precio=5.5,
+                   velocidad=70, tiro=52, pase=64, regate=62, defensa=80, fisico=80, nacionalidad='Uruguay', edad=34),
+            Jugador(nombre='Sergi Gomez', equipo_real_id=espanyol.id, posicion='DEF', precio=5.0,
+                   velocidad=70, tiro=50, pase=64, regate=62, defensa=78, fisico=78, nacionalidad='España', edad=30),
+            Jugador(nombre='Carlos Romero', equipo_real_id=espanyol.id, posicion='DEF', precio=5.0,
+                   velocidad=74, tiro=52, pase=66, regate=64, defensa=77, fisico=76, nacionalidad='España', edad=23),
+            Jugador(nombre='Pol Lirola', equipo_real_id=espanyol.id, posicion='DEF', precio=5.0,
+                   velocidad=82, tiro=54, pase=66, regate=68, defensa=73, fisico=74, nacionalidad='España', edad=27),
+            Jugador(nombre='Nathanael Ogbeta', equipo_real_id=espanyol.id, posicion='DEF', precio=4.0,
+                   velocidad=82, tiro=50, pase=62, regate=64, defensa=72, fisico=72, nacionalidad='Camerún', edad=23),
+            # Centrocampistas
+            Jugador(nombre='Sergi Darder', equipo_real_id=espanyol.id, posicion='MED', precio=7.0,
+                   velocidad=74, tiro=74, pase=82, regate=82, defensa=62, fisico=70, nacionalidad='España', edad=30),
+            Jugador(nombre='Javi Puado', equipo_real_id=espanyol.id, posicion='MED', precio=6.0,
+                   velocidad=82, tiro=74, pase=72, regate=78, defensa=52, fisico=70, nacionalidad='España', edad=25),
+            Jugador(nombre='Brian Olivan', equipo_real_id=espanyol.id, posicion='MED', precio=4.5,
+                   velocidad=78, tiro=62, pase=68, regate=70, defensa=64, fisico=70, nacionalidad='España', edad=26),
+            Jugador(nombre='Marc Roca', equipo_real_id=espanyol.id, posicion='MED', precio=5.5,
+                   velocidad=72, tiro=66, pase=76, regate=72, defensa=72, fisico=74, nacionalidad='España', edad=27),
+            Jugador(nombre='Pere Milla', equipo_real_id=espanyol.id, posicion='MED', precio=4.5,
+                   velocidad=82, tiro=68, pase=68, regate=74, defensa=50, fisico=68, nacionalidad='España', edad=29),
+            # Delanteros
+            Jugador(nombre='Alejo Veliz', equipo_real_id=espanyol.id, posicion='DEL', precio=6.0,
+                   velocidad=78, tiro=78, pase=66, regate=74, defensa=36, fisico=80, nacionalidad='Argentina', edad=21),
+            Jugador(nombre='Jofre Carreras', equipo_real_id=espanyol.id, posicion='DEL', precio=4.5,
+                   velocidad=84, tiro=70, pase=66, regate=76, defensa=32, fisico=66, nacionalidad='España', edad=22),
+            Jugador(nombre='Calixto', equipo_real_id=espanyol.id, posicion='DEL', precio=4.0,
+                   velocidad=80, tiro=70, pase=62, regate=72, defensa=32, fisico=70, nacionalidad='Brasil', edad=23),
+        ])
+
+        # ========== DEPORTIVO ALAVES ==========
+        jugadores.extend([
+            # Defensas
+            Jugador(nombre='Nahuel Tenaglia', equipo_real_id=alaves.id, posicion='DEF', precio=5.0,
+                   velocidad=80, tiro=52, pase=65, regate=66, defensa=75, fisico=74, nacionalidad='Argentina', edad=27),
+            Jugador(nombre='Victor Laguardia', equipo_real_id=alaves.id, posicion='DEF', precio=5.0,
+                   velocidad=68, tiro=52, pase=64, regate=60, defensa=79, fisico=78, nacionalidad='España', edad=34),
+            Jugador(nombre='Mouriño', equipo_real_id=alaves.id, posicion='DEF', precio=4.5,
+                   velocidad=72, tiro=50, pase=63, regate=62, defensa=76, fisico=76, nacionalidad='España', edad=26),
+            Jugador(nombre='Abqar Kone', equipo_real_id=alaves.id, posicion='DEF', precio=4.5,
+                   velocidad=78, tiro=50, pase=62, regate=64, defensa=74, fisico=76, nacionalidad='Costa de Marfil', edad=23),
+            Jugador(nombre='Carlos Vicente', equipo_real_id=alaves.id, posicion='DEF', precio=4.0,
+                   velocidad=76, tiro=50, pase=62, regate=62, defensa=73, fisico=73, nacionalidad='España', edad=22),
+            # Centrocampistas
+            Jugador(nombre='Jon Guridi', equipo_real_id=alaves.id, posicion='MED', precio=5.0,
+                   velocidad=72, tiro=66, pase=74, regate=70, defensa=72, fisico=74, nacionalidad='España', edad=25),
+            Jugador(nombre='Manu Garcia', equipo_real_id=alaves.id, posicion='MED', precio=5.5,
+                   velocidad=76, tiro=70, pase=76, regate=74, defensa=64, fisico=70, nacionalidad='España', edad=30),
+            Jugador(nombre='Tomas Conechny', equipo_real_id=alaves.id, posicion='MED', precio=5.0,
+                   velocidad=80, tiro=68, pase=72, regate=76, defensa=56, fisico=70, nacionalidad='Argentina', edad=25),
+            Jugador(nombre='Theo Zidane', equipo_real_id=alaves.id, posicion='MED', precio=4.0,
+                   velocidad=76, tiro=64, pase=68, regate=70, defensa=58, fisico=70, nacionalidad='Francia', edad=22),
+            Jugador(nombre='Luis Rioja', equipo_real_id=alaves.id, posicion='MED', precio=5.0,
+                   velocidad=84, tiro=70, pase=70, regate=76, defensa=50, fisico=68, nacionalidad='España', edad=29),
+            # Delanteros
+            Jugador(nombre='Mamadou Sylla', equipo_real_id=alaves.id, posicion='DEL', precio=5.5,
+                   velocidad=86, tiro=74, pase=62, regate=76, defensa=32, fisico=74, nacionalidad='Senegal', edad=25),
+            Jugador(nombre='Aboubakar Keita', equipo_real_id=alaves.id, posicion='DEL', precio=5.0,
+                   velocidad=88, tiro=72, pase=62, regate=76, defensa=30, fisico=70, nacionalidad='Costa de Marfil', edad=22),
+            Jugador(nombre='Toni Martinez', equipo_real_id=alaves.id, posicion='DEL', precio=5.0,
+                   velocidad=76, tiro=76, pase=62, regate=70, defensa=34, fisico=78, nacionalidad='España', edad=28),
+        ])
+
+        # ========== REAL VALLADOLID ==========
+        jugadores.extend([
+            # Defensas
+            Jugador(nombre='Jawad El Yamiq', equipo_real_id=valladolid.id, posicion='DEF', precio=5.5,
+                   velocidad=74, tiro=54, pase=66, regate=64, defensa=79, fisico=80, nacionalidad='Marruecos', edad=31),
+            Jugador(nombre='Moussa Diakhaby', equipo_real_id=valladolid.id, posicion='DEF', precio=5.0,
+                   velocidad=76, tiro=52, pase=64, regate=62, defensa=78, fisico=82, nacionalidad='Francia', edad=28),
+            Jugador(nombre='Ivan Frutos', equipo_real_id=valladolid.id, posicion='DEF', precio=4.5,
+                   velocidad=72, tiro=50, pase=63, regate=60, defensa=75, fisico=76, nacionalidad='España', edad=26),
+            Jugador(nombre='Alain Ribeiro', equipo_real_id=valladolid.id, posicion='DEF', precio=4.5,
+                   velocidad=78, tiro=50, pase=62, regate=64, defensa=73, fisico=74, nacionalidad='Portugal', edad=25),
+            Jugador(nombre='Lucas Rosa', equipo_real_id=valladolid.id, posicion='DEF', precio=4.0,
+                   velocidad=74, tiro=50, pase=62, regate=62, defensa=72, fisico=74, nacionalidad='Brasil', edad=23),
+            # Centrocampistas
+            Jugador(nombre='Raul Moro', equipo_real_id=valladolid.id, posicion='MED', precio=6.0,
+                   velocidad=84, tiro=74, pase=72, regate=78, defensa=50, fisico=70, nacionalidad='España', edad=22),
+            Jugador(nombre='Selim Amallah', equipo_real_id=valladolid.id, posicion='MED', precio=5.5,
+                   velocidad=76, tiro=70, pase=74, regate=74, defensa=62, fisico=72, nacionalidad='Marruecos', edad=27),
+            Jugador(nombre='Kike Perez', equipo_real_id=valladolid.id, posicion='MED', precio=4.5,
+                   velocidad=70, tiro=64, pase=72, regate=68, defensa=68, fisico=70, nacionalidad='España', edad=30),
+            Jugador(nombre='Plata', equipo_real_id=valladolid.id, posicion='MED', precio=5.0,
+                   velocidad=82, tiro=68, pase=70, regate=76, defensa=50, fisico=66, nacionalidad='Ecuador', edad=24),
+            Jugador(nombre='Oluwasanya', equipo_real_id=valladolid.id, posicion='MED', precio=4.0,
+                   velocidad=80, tiro=62, pase=66, regate=72, defensa=52, fisico=68, nacionalidad='Nigeria', edad=23),
+            # Delanteros
+            Jugador(nombre='Largie Ramazani', equipo_real_id=valladolid.id, posicion='DEL', precio=6.0,
+                   velocidad=90, tiro=74, pase=68, regate=80, defensa=32, fisico=68, nacionalidad='Bélgica', edad=23),
+            Jugador(nombre='Marcos Leon', equipo_real_id=valladolid.id, posicion='DEL', precio=5.0,
+                   velocidad=78, tiro=76, pase=64, regate=72, defensa=34, fisico=76, nacionalidad='España', edad=26),
+            Jugador(nombre='Sergio Leon', equipo_real_id=valladolid.id, posicion='DEL', precio=4.0,
+                   velocidad=72, tiro=74, pase=60, regate=66, defensa=32, fisico=74, nacionalidad='España', edad=36),
+        ])
+
+        # ========== CD LEGANES ==========
+        jugadores.extend([
+            # Defensas
+            Jugador(nombre='Jonathan Silva', equipo_real_id=leganes.id, posicion='DEF', precio=5.0,
+                   velocidad=76, tiro=52, pase=64, regate=64, defensa=76, fisico=76, nacionalidad='Argentina', edad=32),
+            Jugador(nombre='Sergio Gonzalez', equipo_real_id=leganes.id, posicion='DEF', precio=4.5,
+                   velocidad=70, tiro=50, pase=63, regate=60, defensa=76, fisico=76, nacionalidad='España', edad=27),
+            Jugador(nombre='Franquesa', equipo_real_id=leganes.id, posicion='DEF', precio=4.5,
+                   velocidad=78, tiro=50, pase=63, regate=64, defensa=73, fisico=72, nacionalidad='España', edad=28),
+            Jugador(nombre='Diego Garcia', equipo_real_id=leganes.id, posicion='DEF', precio=4.0,
+                   velocidad=72, tiro=50, pase=62, regate=60, defensa=74, fisico=74, nacionalidad='España', edad=26),
+            Jugador(nombre='Bustinza', equipo_real_id=leganes.id, posicion='DEF', precio=4.5,
+                   velocidad=72, tiro=50, pase=64, regate=62, defensa=75, fisico=76, nacionalidad='Argentina', edad=33),
+            # Centrocampistas
+            Jugador(nombre='Munir', equipo_real_id=leganes.id, posicion='MED', precio=5.5,
+                   velocidad=82, tiro=72, pase=70, regate=76, defensa=52, fisico=68, nacionalidad='España', edad=29),
+            Jugador(nombre='Javi Hernandez', equipo_real_id=leganes.id, posicion='MED', precio=5.0,
+                   velocidad=70, tiro=66, pase=74, regate=70, defensa=68, fisico=70, nacionalidad='España', edad=34),
+            Jugador(nombre='Kevin', equipo_real_id=leganes.id, posicion='MED', precio=5.0,
+                   velocidad=76, tiro=68, pase=72, regate=72, defensa=60, fisico=70, nacionalidad='España', edad=29),
+            Jugador(nombre='Miguel de la Fuente', equipo_real_id=leganes.id, posicion='MED', precio=4.5,
+                   velocidad=76, tiro=66, pase=70, regate=72, defensa=56, fisico=68, nacionalidad='España', edad=24),
+            Jugador(nombre='Yvan Neyou', equipo_real_id=leganes.id, posicion='MED', precio=4.5,
+                   velocidad=74, tiro=62, pase=70, regate=68, defensa=70, fisico=74, nacionalidad='Camerún', edad=28),
+            # Delanteros
+            Jugador(nombre='Omar Bogle', equipo_real_id=leganes.id, posicion='DEL', precio=5.0,
+                   velocidad=82, tiro=74, pase=60, regate=70, defensa=32, fisico=78, nacionalidad='Gambia', edad=31),
+            Jugador(nombre='Hernan Toledo', equipo_real_id=leganes.id, posicion='DEL', precio=5.0,
+                   velocidad=80, tiro=74, pase=62, regate=72, defensa=32, fisico=74, nacionalidad='Argentina', edad=24),
+            Jugador(nombre='Ante Budimir', equipo_real_id=leganes.id, posicion='DEL', precio=5.5,
+                   velocidad=72, tiro=76, pase=60, regate=66, defensa=34, fisico=82, nacionalidad='Croacia', edad=33),
+        ])
+
+        # ========== UD LAS PALMAS ==========
+        jugadores.extend([
+            # Defensas
+            Jugador(nombre='Alex Suarez', equipo_real_id=las_palmas.id, posicion='DEF', precio=4.5,
+                   velocidad=74, tiro=52, pase=66, regate=64, defensa=76, fisico=74, nacionalidad='España', edad=29),
+            Jugador(nombre='Mika Marmol', equipo_real_id=las_palmas.id, posicion='DEF', precio=5.0,
+                   velocidad=74, tiro=52, pase=66, regate=64, defensa=78, fisico=78, nacionalidad='España', edad=24),
+            Jugador(nombre='Coco', equipo_real_id=las_palmas.id, posicion='DEF', precio=5.0,
+                   velocidad=72, tiro=52, pase=65, regate=64, defensa=77, fisico=76, nacionalidad='España', edad=28),
+            Jugador(nombre='Óscar Climent', equipo_real_id=las_palmas.id, posicion='DEF', precio=4.0,
+                   velocidad=70, tiro=50, pase=62, regate=60, defensa=74, fisico=74, nacionalidad='España', edad=31),
+            Jugador(nombre='Sergi Cardona', equipo_real_id=las_palmas.id, posicion='DEF', precio=4.5,
+                   velocidad=78, tiro=52, pase=64, regate=64, defensa=73, fisico=72, nacionalidad='España', edad=24),
+            # Centrocampistas
+            Jugador(nombre='Kirian Rodriguez', equipo_real_id=las_palmas.id, posicion='MED', precio=6.0,
+                   velocidad=72, tiro=68, pase=78, regate=74, defensa=70, fisico=72, nacionalidad='España', edad=28),
+            Jugador(nombre='Jonathan Viera', equipo_real_id=las_palmas.id, posicion='MED', precio=5.5,
+                   velocidad=70, tiro=72, pase=82, regate=82, defensa=56, fisico=64, nacionalidad='España', edad=35),
+            Jugador(nombre='Javi Munoz', equipo_real_id=las_palmas.id, posicion='MED', precio=5.0,
+                   velocidad=74, tiro=66, pase=74, regate=72, defensa=62, fisico=70, nacionalidad='España', edad=26),
+            Jugador(nombre='Alberto Moleiro', equipo_real_id=las_palmas.id, posicion='MED', precio=6.5,
+                   velocidad=80, tiro=72, pase=78, regate=82, defensa=52, fisico=66, nacionalidad='España', edad=21),
+            Jugador(nombre='Mika Sainte', equipo_real_id=las_palmas.id, posicion='MED', precio=4.5,
+                   velocidad=82, tiro=64, pase=68, regate=74, defensa=52, fisico=68, nacionalidad='Guinea', edad=22),
+            # Delanteros
+            Jugador(nombre='Sandro Ramirez', equipo_real_id=las_palmas.id, posicion='DEL', precio=6.0,
+                   velocidad=80, tiro=78, pase=72, regate=78, defensa=38, fisico=70, nacionalidad='España', edad=29),
+            Jugador(nombre='Marvin Park', equipo_real_id=las_palmas.id, posicion='DEL', precio=5.5,
+                   velocidad=86, tiro=72, pase=68, regate=78, defensa=34, fisico=68, nacionalidad='España', edad=23),
+            Jugador(nombre='Fabio Silva', equipo_real_id=las_palmas.id, posicion='DEL', precio=5.5,
+                   velocidad=78, tiro=76, pase=66, regate=74, defensa=36, fisico=78, nacionalidad='Portugal', edad=22),
+        ])
+
         print("👤 Creando jugadores de Premier League...")
         
         # ========== MANCHESTER CITY ==========

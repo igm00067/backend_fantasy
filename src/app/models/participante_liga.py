@@ -13,6 +13,8 @@ class ParticipanteLiga(db.Model):
     partidos_perdidos = db.Column(db.Integer, default=0)
     goles_favor = db.Column(db.Integer, default=0)
     goles_contra = db.Column(db.Integer, default=0)
+    abandonado = db.Column(db.Boolean, default=False)
+    fecha_abandono = db.Column(db.DateTime, nullable=True)
     fecha_union = db.Column(db.DateTime, default=datetime.utcnow)
     
     def to_dict(self):
@@ -26,5 +28,7 @@ class ParticipanteLiga(db.Model):
             'partidos_perdidos': self.partidos_perdidos,
             'goles_favor': self.goles_favor,
             'goles_contra': self.goles_contra,
-            'diferencia_goles': self.goles_favor - self.goles_contra
+            'diferencia_goles': self.goles_favor - self.goles_contra,
+            'abandonado': self.abandonado,
+            'fecha_abandono': self.fecha_abandono.isoformat() if self.fecha_abandono else None
         }

@@ -14,8 +14,10 @@ class LigaFantasy(db.Model):
     presupuesto_inicial = db.Column(db.Numeric(10, 2), default=100.00)
     max_jugadores_por_equipo = db.Column(db.Integer, default=24)
     activa = db.Column(db.Boolean, default=True)
+    estado = db.Column(db.String(20), default='pendiente')  # pendiente / en_curso / finalizada
+    duracion_jornada_minutos = db.Column(db.Integer, default=10080)  # 7 días; 2 para pruebas
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    
+
     def to_dict(self):
         return {
             'id': self.id,
@@ -27,5 +29,7 @@ class LigaFantasy(db.Model):
             'presupuesto_inicial': float(self.presupuesto_inicial),
             'max_jugadores_por_equipo': self.max_jugadores_por_equipo,
             'activa': self.activa,
+            'estado': self.estado,
+            'duracion_jornada_minutos': self.duracion_jornada_minutos,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }

@@ -6,9 +6,9 @@ class HistorialTransaccion(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     liga_id = db.Column(db.Integer, db.ForeignKey('ligas_fantasy.id'), nullable=False)
-    tipo = db.Column(db.String(20), nullable=False)  # FICHAJE_MERCADO, VENTA, FICHAJE_INICIAL
+    tipo = db.Column(db.String(20), nullable=False)  # FICHAJE_MERCADO, VENTA, FICHAJE_INICIAL, ABANDONO
     equipo_fantasy_id = db.Column(db.Integer, db.ForeignKey('equipos_fantasy.id'), nullable=False)
-    jugador_id = db.Column(db.Integer, db.ForeignKey('jugadores.id'), nullable=False)
+    jugador_id = db.Column(db.Integer, db.ForeignKey('jugadores.id'), nullable=True)
     precio = db.Column(db.Numeric(10, 2), nullable=False)
     descripcion = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)

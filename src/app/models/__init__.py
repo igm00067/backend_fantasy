@@ -7,3 +7,7 @@ from app.models.participante_liga import ParticipanteLiga
 from app.models.equipo_fantasy import EquipoFantasy
 from app.models.plantilla_equipo import PlantillaEquipo
 from app.models.jornada import Jornada
+from app.models.confirmacion_inicio import ConfirmacionInicio
+from app.models.partido import Partido
+from app.models.evento_partido import EventoPartido
+from app.models.cambio_descanso import CambioDescanso

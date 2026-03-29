@@ -1,15 +1,18 @@
 from app.extensions import db
+from datetime import datetime
 
 class Jornada(db.Model):
     __tablename__ = 'jornadas'
-    
+
     id = db.Column(db.Integer, primary_key=True)
     liga_fantasy_id = db.Column(db.Integer, db.ForeignKey('ligas_fantasy.id'), nullable=False)
     numero = db.Column(db.Integer, nullable=False)
-    fecha_inicio = db.Column(db.Date, nullable=False)
-    fecha_fin = db.Column(db.Date, nullable=False)
-    finalizada = db.Column(db.Boolean, default=False)
-    
+    fecha_inicio = db.Column(db.DateTime, nullable=True)
+    fecha_fin = db.Column(db.DateTime, nullable=True)
+    estado = db.Column(db.String(20), default='pendiente')  # pendiente / en_curso / finalizada
+
+    partidos = db.relationship('Partido', backref='jornada', lazy=True)
+
     def to_dict(self):
         return {
             'id': self.id,
@@ -17,5 +20,5 @@ class Jornada(db.Model):
             'numero': self.numero,
             'fecha_inicio': self.fecha_inicio.isoformat() if self.fecha_inicio else None,
             'fecha_fin': self.fecha_fin.isoformat() if self.fecha_fin else None,
-            'finalizada': self.finalizada
+            'estado': self.estado,
         }

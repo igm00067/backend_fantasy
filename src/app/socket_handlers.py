@@ -3,6 +3,7 @@ from flask_jwt_extended import decode_token
 from app.models.conversacion import Conversacion
 from app.models.mensaje import Mensaje
 from app.models.usuario import Usuario
+from app.models.participante_liga import ParticipanteLiga
 from app.extensions import db
 from datetime import datetime
 
@@ -94,7 +95,25 @@ def init_app(socketio):
                 print(f"❌ Usuario {user_id} no es parte de la conversación")
                 emit('error', {'message': 'No eres parte de esta conversación'})
                 return
-            
+
+            # Verificar si alguno de los usuarios ha abandonado la liga
+            mi_participacion = ParticipanteLiga.query.filter_by(
+                liga_id=conversacion.liga_id,
+                usuario_id=user_id
+            ).first()
+            if mi_participacion and mi_participacion.abandonado:
+                emit('error', {'message': 'Ya no formas parte de esta liga'})
+                return
+
+            destinatario_id_check = conversacion.usuario2_id if conversacion.usuario1_id == user_id else conversacion.usuario1_id
+            otro_participacion = ParticipanteLiga.query.filter_by(
+                liga_id=conversacion.liga_id,
+                usuario_id=destinatario_id_check
+            ).first()
+            if otro_participacion and otro_participacion.abandonado:
+                emit('error', {'message': 'Este usuario ya no forma parte de la liga'})
+                return
+
             # Crear el mensaje
             nuevo_mensaje = Mensaje(
                 conversacion_id=conversacion_id,
@@ -201,18 +220,37 @@ def init_app(socketio):
     
     @socketio.on('leave_conversation')
     def handle_leave_conversation(data):
-        """
-        Saca al usuario de una sala de conversación
-        """
         try:
             conversacion_id = data.get('conversacion_id')
             leave_room(f'conv_{conversacion_id}')
             print(f"👋 Usuario salió de conversación {conversacion_id}")
-            
         except Exception as e:
             print(f"ERROR saliendo de conversación: {e}")
 
-    print("✅ Socket handlers registrados correctamente")
+    @socketio.on('join_liga')
+    def handle_join_liga(data):
+        """Une al usuario a la sala de su liga para recibir eventos de simulación."""
+        try:
+            liga_id = data.get('liga_id')
+            token = data.get('token')
+            if not all([liga_id, token]):
+                return
+            decoded = decode_token(token)
+            user_id = int(decoded['sub'])
+            join_room(f'liga_{liga_id}')
+            print(f"✅ Usuario {user_id} unido a sala liga_{liga_id}")
+        except Exception as e:
+            print(f"ERROR en join_liga: {e}")
+
+    @socketio.on('leave_liga')
+    def handle_leave_liga(data):
+        try:
+            liga_id = data.get('liga_id')
+            leave_room(f'liga_{liga_id}')
+        except Exception as e:
+            print(f"ERROR en leave_liga: {e}")
+
+    print("Socket handlers registrados correctamente")
     
     
     def emitir_oferta_creada(mensaje_data):

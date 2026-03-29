@@ -345,30 +345,34 @@ def obtener_historial(liga_id):
         transacciones = db.session.query(
             HistorialTransaccion,
             EquipoFantasy,
-            Usuario,
-            Jugador
+            Usuario
         ).join(
             EquipoFantasy, HistorialTransaccion.equipo_fantasy_id == EquipoFantasy.id
         ).join(
             Usuario, EquipoFantasy.usuario_id == Usuario.id
-        ).join(
-            Jugador, HistorialTransaccion.jugador_id == Jugador.id
         ).filter(
             HistorialTransaccion.liga_id == liga_id
         ).order_by(
             HistorialTransaccion.created_at.desc()
         ).limit(limit).all()
-        
+
         resultado = []
-        for transaccion, equipo, usuario, jugador in transacciones:
-            resultado.append({
+        for transaccion, equipo, usuario in transacciones:
+            entry = {
                 **transaccion.to_dict(),
                 'equipo_nombre': equipo.nombre,
                 'usuario_nombre': usuario.nombre,
-                'jugador_nombre': jugador.nombre,
-                'jugador_posicion': jugador.posicion,
-                'jugador_nacionalidad': jugador.nacionalidad
-            })
+            }
+            if transaccion.jugador_id:
+                jugador = Jugador.query.get(transaccion.jugador_id)
+                entry['jugador_nombre'] = jugador.nombre if jugador else None
+                entry['jugador_posicion'] = jugador.posicion if jugador else None
+                entry['jugador_nacionalidad'] = jugador.nacionalidad if jugador else None
+            else:
+                entry['jugador_nombre'] = None
+                entry['jugador_posicion'] = None
+                entry['jugador_nacionalidad'] = None
+            resultado.append(entry)
         
         return jsonify(resultado), 200
         

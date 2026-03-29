@@ -4,7 +4,12 @@
       "Read(//c/Users/ismae/OneDrive/Escritorio/flutter-projects/fantasy_football_manager/**)",
       "Bash(dart analyze:*)",
       "Bash(grep:*)",
-      "Bash(sed:*)"
+      "Bash(sed:*)",
+      "Bash(cd:*)",
+      "Bash(cd src:*)",
+      "Bash(PYTHONIOENCODING=utf-8 venv/Scripts/python.exe src/populate_database.py 2>&1 | tail -20)",
+      "Bash(source:*)",
+      "Bash(find:*)"
     ]
   }
 }

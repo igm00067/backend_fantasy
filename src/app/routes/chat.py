@@ -46,12 +46,19 @@ def obtener_conversaciones(liga_id):
             # Determinar quién es el otro usuario
             otro_usuario_id = conv.usuario2_id if conv.usuario1_id == user_id else conv.usuario1_id
             otro_usuario = Usuario.query.get(otro_usuario_id)
-            
+
+            # Verificar si el otro usuario ha abandonado la liga
+            otro_participante = ParticipanteLiga.query.filter_by(
+                liga_id=liga_id,
+                usuario_id=otro_usuario_id
+            ).first()
+            otro_abandonado = otro_participante.abandonado if otro_participante else False
+
             # Obtener último mensaje
             ultimo_mensaje = Mensaje.query.filter_by(
                 conversacion_id=conv.id
             ).order_by(Mensaje.created_at.desc()).first()
-            
+
             # Contar mensajes no leídos
             mensajes_no_leidos = Mensaje.query.filter_by(
                 conversacion_id=conv.id,
@@ -59,13 +66,14 @@ def obtener_conversaciones(liga_id):
             ).filter(
                 Mensaje.remitente_id != user_id
             ).count()
-            
+
             resultado.append({
                 **conv.to_dict(),
                 'otro_usuario': {
                     'id': otro_usuario.id,
                     'nombre': otro_usuario.nombre,
-                    'foto_perfil_url': otro_usuario.foto_perfil_url
+                    'foto_perfil_url': otro_usuario.foto_perfil_url,
+                    'abandonado': otro_abandonado
                 } if otro_usuario else None,
                 'ultimo_mensaje': ultimo_mensaje.to_dict() if ultimo_mensaje else None,
                 'mensajes_no_leidos': mensajes_no_leidos
@@ -105,6 +113,10 @@ def obtener_o_crear_conversacion(otro_usuario_id, liga_id):
         
         if not usuario1_participa or not usuario2_participa:
             return jsonify({'error': 'Ambos usuarios deben estar en la liga'}), 403
+
+        # Verificar si el otro usuario ha abandonado la liga
+        if usuario2_participa.abandonado:
+            return jsonify({'error': 'Este usuario ya no forma parte de la liga'}), 403
         
         # Buscar conversación existente (en cualquier orden)
         conversacion = Conversacion.query.filter(
@@ -152,10 +164,18 @@ def obtener_mensajes(conversacion_id):
         
         # Verificar que el usuario es parte de la conversación
         conversacion = Conversacion.query.get_or_404(conversacion_id)
-        
+
         if conversacion.usuario1_id != user_id and conversacion.usuario2_id != user_id:
             return jsonify({'error': 'No tienes acceso a esta conversación'}), 403
-        
+
+        # Verificar si el otro usuario ha abandonado
+        otro_usuario_id = conversacion.usuario2_id if conversacion.usuario1_id == user_id else conversacion.usuario1_id
+        otro_participante = ParticipanteLiga.query.filter_by(
+            liga_id=conversacion.liga_id,
+            usuario_id=otro_usuario_id
+        ).first()
+        otro_abandonado = otro_participante.abandonado if otro_participante else False
+
         # Obtener mensajes
         mensajes = Mensaje.query.filter_by(
             conversacion_id=conversacion_id
@@ -233,7 +253,10 @@ def obtener_mensajes(conversacion_id):
             resultado.append(mensaje_dict)
         
         print(f"✅ Devolviendo {len(resultado)} mensajes")  # ← DEBUG
-        return jsonify(resultado), 200
+        return jsonify({
+            'mensajes': resultado,
+            'otro_usuario_abandonado': otro_abandonado
+        }), 200
         
     except Exception as e:
         print(f"ERROR obteniendo mensajes: {e}")
@@ -277,7 +300,15 @@ def crear_oferta():
         
         if not remitente_equipo or not destinatario_equipo:
             return jsonify({'error': 'Equipos no encontrados'}), 404
-        
+
+        # Verificar que ninguno ha abandonado la liga
+        participante_dest = ParticipanteLiga.query.filter_by(
+            liga_id=conversacion.liga_id,
+            usuario_id=destinatario_id
+        ).first()
+        if participante_dest and participante_dest.abandonado:
+            return jsonify({'error': 'Este usuario ya no forma parte de la liga'}), 403
+
         # Validar que el jugador ofrecido pertenece al remitente
         if jugador_ofrecido_id:
             plantilla_ofrecido = PlantillaEquipo.query.filter_by(

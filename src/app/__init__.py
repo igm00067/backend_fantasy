@@ -15,6 +15,10 @@ def create_app():
     # Configuración
     app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+        'pool_pre_ping': True,
+        'pool_recycle': 280,
+    }
     app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'tu-clave-secreta-super-segura')
     app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(days=7)
     
@@ -62,9 +66,10 @@ def create_app():
     from app.routes.ligas import bp as ligas_bp
     from app.routes.mercado import bp as mercado_bp
     from app.routes.chat import bp as chat_bp
+    from app.routes.simulacion import bp as simulacion_bp
     from app.models import conversacion, mensaje, oferta_jugador
+    from app.models import confirmacion_inicio, partido, evento_partido, cambio_descanso
 
-    
     app.register_blueprint(usuarios_bp)
     app.register_blueprint(competiciones_bp)
     app.register_blueprint(equipos_bp)
@@ -73,12 +78,22 @@ def create_app():
     app.register_blueprint(ligas_bp)
     app.register_blueprint(mercado_bp)
     app.register_blueprint(chat_bp)
-    
+    app.register_blueprint(simulacion_bp)
+
     # Registrar socket handlers
     from app import socket_handlers
     socket_handlers.init_app(socketio)
-    
-    print("✅ Aplicación Flask configurada correctamente")
-    print("✅ SocketIO inicializado")
+
+    # Iniciar scheduler (tick cada 60 segundos)
+    from apscheduler.schedulers.background import BackgroundScheduler
+    from app.simulacion_service import tick_scheduler, set_socketio
+    set_socketio(socketio)
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(tick_scheduler, 'interval', seconds=60, args=[app])
+    scheduler.start()
+    print("Scheduler iniciado")
+
+    print("Aplicacion Flask configurada correctamente")
+    print("SocketIO inicializado")
     
     return app, socketio

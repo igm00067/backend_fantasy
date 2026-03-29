@@ -10,6 +10,8 @@ from sqlalchemy import func
 import random
 from app.models.equipo_real import EquipoReal
 from app.models.usuario import Usuario
+from app.models.historial_transaccion import HistorialTransaccion
+from datetime import datetime
 
 bp = Blueprint('ligas', __name__, url_prefix='/api/ligas')
 
@@ -169,12 +171,23 @@ def obtener_mis_ligas():
     try:
         user_id = int(get_jwt_identity())
         
-        participaciones = ParticipanteLiga.query.filter_by(usuario_id=user_id).all()
+        participaciones = ParticipanteLiga.query.filter_by(
+            usuario_id=user_id,
+            abandonado=False
+        ).all()
         ligas_ids = [p.liga_id for p in participaciones]
-        
+
         ligas = LigaFantasy.query.filter(LigaFantasy.id.in_(ligas_ids)).all()
-        
-        return jsonify([liga.to_dict() for liga in ligas]), 200
+
+        resultado = []
+        for liga in ligas:
+            d = liga.to_dict()
+            d['num_participantes'] = ParticipanteLiga.query.filter_by(
+                liga_id=liga.id, abandonado=False
+            ).count()
+            resultado.append(d)
+
+        return jsonify(resultado), 200
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -247,18 +260,19 @@ def obtener_liga(liga_id):
         
         liga = LigaFantasy.query.get_or_404(liga_id)
         
-        # Obtener participantes
+        # Obtener participantes (todos, para info completa; num solo activos)
         participantes = ParticipanteLiga.query.filter_by(liga_id=liga_id).all()
-        
+        participantes_activos = [p for p in participantes if not p.abandonado]
+
         # Obtener el equipo del usuario en esta liga
         mi_equipo = EquipoFantasy.query.filter_by(
             liga_id=liga_id,
             usuario_id=user_id
         ).first()
-        
+
         resultado = liga.to_dict()
         resultado['participantes'] = [p.to_dict() for p in participantes]
-        resultado['num_participantes'] = len(participantes)
+        resultado['num_participantes'] = len(participantes_activos)
         
         # Añadir info del equipo del usuario
         if mi_equipo:
@@ -391,10 +405,9 @@ def guardar_alineacion(liga_id):
 @jwt_required()
 def obtener_clasificacion(liga_id):
     try:
-        # Verificar que la liga existe
+        user_id = int(get_jwt_identity())
         liga = LigaFantasy.query.get_or_404(liga_id)
-        
-        # Obtener todos los participantes de la liga con sus datos
+
         participantes = db.session.query(
             ParticipanteLiga,
             Usuario,
@@ -402,7 +415,7 @@ def obtener_clasificacion(liga_id):
         ).join(
             Usuario, ParticipanteLiga.usuario_id == Usuario.id
         ).join(
-            EquipoFantasy, 
+            EquipoFantasy,
             db.and_(
                 EquipoFantasy.usuario_id == Usuario.id,
                 EquipoFantasy.liga_id == liga_id
@@ -413,17 +426,17 @@ def obtener_clasificacion(liga_id):
             ParticipanteLiga.puntos_totales.desc(),
             ParticipanteLiga.goles_favor.desc()
         ).all()
-        
-        # Formatear datos para la respuesta
+
         clasificacion = []
         posicion = 1
-        
+
         for participante, usuario, equipo in participantes:
             clasificacion.append({
                 'posicion': posicion,
                 'usuario_id': usuario.id,
                 'usuario_nombre': usuario.nombre,
                 'equipo_nombre': equipo.nombre,
+                'es_mi_equipo': usuario.id == user_id,
                 'puntos': participante.puntos_totales,
                 'partidos_ganados': participante.partidos_ganados,
                 'partidos_empatados': participante.partidos_empatados,
@@ -434,10 +447,12 @@ def obtener_clasificacion(liga_id):
                 'partidos_jugados': participante.partidos_ganados + participante.partidos_empatados + participante.partidos_perdidos
             })
             posicion += 1
-        
+
+        ganador = clasificacion[0] if clasificacion and liga.estado == 'finalizada' else None
         return jsonify({
             'liga': liga.to_dict(),
-            'clasificacion': clasificacion
+            'clasificacion': clasificacion,
+            'ganador': ganador,
         }), 200
         
     except Exception as e:
@@ -512,12 +527,174 @@ def obtener_equipo_usuario(liga_id, usuario_id):
             'plantilla': plantilla_completa,
             'titulares': titulares
         }), 200
-        
+
     except Exception as e:
         print(f"ERROR obteniendo equipo de usuario: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
-    
-    
-    
+
+
+@bp.route('/<int:liga_id>/propiedad-jugadores', methods=['GET'])
+@jwt_required()
+def propiedad_jugadores(liga_id):
+    """
+    Devuelve un mapa {jugador_id: equipo_nombre} con todos los jugadores
+    que pertenecen a algún equipo fantasy de esta liga.
+    """
+    try:
+        filas = db.session.query(
+            PlantillaEquipo.jugador_id,
+            EquipoFantasy.nombre
+        ).join(
+            EquipoFantasy, PlantillaEquipo.equipo_fantasy_id == EquipoFantasy.id
+        ).filter(
+            EquipoFantasy.liga_id == liga_id
+        ).all()
+
+        return jsonify({str(jugador_id): nombre for jugador_id, nombre in filas}), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@bp.route('/<int:liga_id>/mi-equipo/vender-jugador', methods=['POST'])
+@jwt_required()
+def vender_jugador(liga_id):
+    """
+    Vender un jugador de vuelta a la liga (liberarlo al mercado) por su valor.
+    """
+    try:
+        user_id = int(get_jwt_identity())
+        datos = request.get_json()
+        jugador_id = datos.get('jugador_id')
+
+        if not jugador_id:
+            return jsonify({'error': 'jugador_id es requerido'}), 400
+
+        # Verificar que el usuario participa en la liga
+        participante = ParticipanteLiga.query.filter_by(
+            liga_id=liga_id, usuario_id=user_id, abandonado=False
+        ).first()
+        if not participante:
+            return jsonify({'error': 'No eres parte de esta liga'}), 403
+
+        # Obtener equipo fantasy
+        equipo = EquipoFantasy.query.filter_by(
+            liga_id=liga_id, usuario_id=user_id
+        ).first()
+        if not equipo:
+            return jsonify({'error': 'No tienes un equipo en esta liga'}), 404
+
+        # Verificar que el jugador está en la plantilla del usuario
+        plantilla_item = PlantillaEquipo.query.filter_by(
+            equipo_fantasy_id=equipo.id,
+            jugador_id=jugador_id
+        ).first()
+        if not plantilla_item:
+            return jsonify({'error': 'Este jugador no está en tu plantilla'}), 404
+
+        # Obtener datos del jugador para el precio
+        jugador = Jugador.query.get(jugador_id)
+        if not jugador:
+            return jsonify({'error': 'Jugador no encontrado'}), 404
+
+        precio_venta = float(jugador.precio)
+
+        # Eliminar de la plantilla (libera al mercado)
+        db.session.delete(plantilla_item)
+
+        # Añadir el dinero al saldo del equipo
+        equipo.saldo_disponible += jugador.precio
+
+        # Registrar en historial
+        historial = HistorialTransaccion(
+            liga_id=liga_id,
+            tipo='VENTA',
+            equipo_fantasy_id=equipo.id,
+            jugador_id=jugador_id,
+            precio=jugador.precio,
+            descripcion=f'{equipo.nombre} vendió a {jugador.nombre} por {precio_venta}M'
+        )
+        db.session.add(historial)
+
+        db.session.commit()
+
+        return jsonify({
+            'mensaje': f'Jugador {jugador.nombre} vendido por {precio_venta}M',
+            'saldo_disponible': float(equipo.saldo_disponible),
+            'jugador_nombre': jugador.nombre,
+            'precio_venta': precio_venta
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"ERROR vendiendo jugador: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+@bp.route('/<int:liga_id>/abandonar', methods=['POST'])
+@jwt_required()
+def abandonar_liga(liga_id):
+    """
+    Abandonar una liga. Libera todos los jugadores al mercado.
+    El equipo se mantiene para los partidos restantes (pierde 3-0 automáticamente).
+    """
+    try:
+        user_id = int(get_jwt_identity())
+
+        # Verificar que el usuario participa en la liga
+        participante = ParticipanteLiga.query.filter_by(
+            liga_id=liga_id, usuario_id=user_id, abandonado=False
+        ).first()
+        if not participante:
+            return jsonify({'error': 'No eres parte de esta liga'}), 403
+
+        # Obtener equipo fantasy
+        equipo = EquipoFantasy.query.filter_by(
+            liga_id=liga_id, usuario_id=user_id
+        ).first()
+        if not equipo:
+            return jsonify({'error': 'No tienes un equipo en esta liga'}), 404
+
+        # Obtener nombre del usuario para el historial
+        usuario = Usuario.query.get(user_id)
+        nombre_usuario = usuario.nombre if usuario else 'Usuario'
+
+        # Liberar todos los jugadores de la plantilla
+        plantilla_items = PlantillaEquipo.query.filter_by(
+            equipo_fantasy_id=equipo.id
+        ).all()
+
+        for item in plantilla_items:
+            db.session.delete(item)
+
+        # Marcar participante como abandonado
+        participante.abandonado = True
+        participante.fecha_abandono = datetime.utcnow()
+
+        # Registrar en historial
+        historial = HistorialTransaccion(
+            liga_id=liga_id,
+            tipo='ABANDONO',
+            equipo_fantasy_id=equipo.id,
+            jugador_id=None,
+            precio=0,
+            descripcion=f'{nombre_usuario} ha abandonado la liga'
+        )
+        db.session.add(historial)
+
+        db.session.commit()
+
+        return jsonify({
+            'mensaje': f'Has abandonado la liga correctamente'
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"ERROR abandonando liga: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500

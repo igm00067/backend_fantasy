@@ -47,67 +47,69 @@ def _emit_liga(liga_id, evento, datos):
 # ──────────────────────────────────────────────
 # Generación de calendario (todos contra todos x2)
 # ──────────────────────────────────────────────
-def generar_calendario(liga_id, app):
-    with app.app_context():
-        liga = LigaFantasy.query.get(liga_id)
-        equipos = EquipoFantasy.query.filter_by(liga_id=liga_id).all()
-        n = len(equipos)
-        if n < 2:
-            return
+def generar_calendario_sync(liga_id):
+    """
+    Genera el calendario round-robin para la liga.
+    Llamar desde un contexto Flask ya activo (petición HTTP o app_context abierto).
+    """
+    liga = LigaFantasy.query.get(liga_id)
+    equipos = EquipoFantasy.query.filter_by(liga_id=liga_id).all()
+    n = len(equipos)
+    if n < 2:
+        return
 
-        # Algoritmo round-robin con lista par
-        ids = [e.id for e in equipos]
-        if n % 2 != 0:
-            ids.append(None)  # equipo ficticio (descanso)
-        m = len(ids)
+    ids = [e.id for e in equipos]
+    if n % 2 != 0:
+        ids.append(None)  # equipo ficticio (descanso)
+    m = len(ids)
 
-        jornadas_ida = []
-        lista = ids[:]
-        for ronda in range(m - 1):
-            enfrentamientos = []
-            for i in range(m // 2):
-                local = lista[i]
-                visitante = lista[m - 1 - i]
-                if local is not None and visitante is not None:
-                    enfrentamientos.append((local, visitante))
-            jornadas_ida.append(enfrentamientos)
-            # Rotar todos excepto el primero
-            lista = [lista[0]] + [lista[-1]] + lista[1:-1]
+    jornadas_ida = []
+    lista = ids[:]
+    for _ in range(m - 1):
+        enfrentamientos = []
+        for i in range(m // 2):
+            local = lista[i]
+            visitante = lista[m - 1 - i]
+            if local is not None and visitante is not None:
+                enfrentamientos.append((local, visitante))
+        jornadas_ida.append(enfrentamientos)
+        lista = [lista[0]] + [lista[-1]] + lista[1:-1]
 
-        # Vuelta: invertir local/visitante
-        jornadas_vuelta = [[(v, l) for l, v in jornada] for jornada in jornadas_ida]
-        todas_las_jornadas = jornadas_ida + jornadas_vuelta
+    jornadas_vuelta = [[(v, l) for l, v in j] for j in jornadas_ida]
+    todas = jornadas_ida + jornadas_vuelta
 
-        now = datetime.utcnow()
-        delta = timedelta(minutes=liga.duracion_jornada_minutos)
+    now = datetime.utcnow()
+    delta = timedelta(minutes=liga.duracion_jornada_minutos)
 
-        for num, enfrentamientos in enumerate(todas_las_jornadas, start=1):
-            fecha_inicio = now + (num - 1) * delta
-            fecha_fin = fecha_inicio + delta
+    for num, enfrentamientos in enumerate(todas, start=1):
+        fecha_inicio = now + (num - 1) * delta
+        jornada = Jornada(
+            liga_fantasy_id=liga_id,
+            numero=num,
+            fecha_inicio=fecha_inicio,
+            fecha_fin=fecha_inicio + delta,
+            estado='pendiente',
+        )
+        db.session.add(jornada)
+        db.session.flush()
 
-            jornada = Jornada(
-                liga_fantasy_id=liga_id,
-                numero=num,
-                fecha_inicio=fecha_inicio,
-                fecha_fin=fecha_fin,
+        for local_id, visitante_id in enfrentamientos:
+            db.session.add(Partido(
+                jornada_id=jornada.id,
+                equipo_local_id=local_id,
+                equipo_visitante_id=visitante_id,
                 estado='pendiente',
-            )
-            db.session.add(jornada)
-            db.session.flush()
+            ))
 
-            for local_id, visitante_id in enfrentamientos:
-                partido = Partido(
-                    jornada_id=jornada.id,
-                    equipo_local_id=local_id,
-                    equipo_visitante_id=visitante_id,
-                    estado='pendiente',
-                )
-                db.session.add(partido)
+    liga.estado = 'en_curso'
+    db.session.commit()
+    _emit_liga(liga_id, 'liga_iniciada', {'liga_id': liga_id, 'total_jornadas': len(todas)})
 
-        liga.estado = 'en_curso'
-        db.session.commit()
-        print(f"[OK] Calendario generado para liga {liga_id}: {len(todas_las_jornadas)} jornadas")
-        _emit_liga(liga_id, 'liga_iniciada', {'liga_id': liga_id, 'total_jornadas': len(todas_las_jornadas)})
+
+def generar_calendario(liga_id, app):
+    """Versión para llamar desde un hilo de fondo (abre su propio app_context)."""
+    with app.app_context():
+        generar_calendario_sync(liga_id)
 
 # ──────────────────────────────────────────────
 # Obtener titulares de un equipo con sus stats
@@ -171,14 +173,6 @@ def _get_suplentes(equipo_id, titulares_ids):
                 'es_suplente': True,
             })
     return resultado
-
-def _tiene_suspendido_en_once(equipo_id):
-    """Devuelve True si hay algún jugador suspendido puesto como titular."""
-    return PlantillaEquipo.query.filter_by(
-        equipo_fantasy_id=equipo_id,
-        es_titular=True,
-        suspendido=True,
-    ).first() is not None
 
 # ──────────────────────────────────────────────
 # Cálculo de fuerzas
@@ -357,55 +351,58 @@ def _aplicar_cambios_pendientes(partido_id, equipo_id, jugadores, suplentes, min
 def _actualizar_estado_jugadores(equipo_id, jugadores_que_jugaron, eventos_partido):
     plantilla = PlantillaEquipo.query.filter_by(equipo_fantasy_id=equipo_id).all()
 
-    # Jugadores que terminaron el partido (no expulsados)
+    # Jugadores que terminaron el partido en el campo
     jugaron_ids = {j['jugador_id'] for j in jugadores_que_jugaron}
 
     # Jugadores expulsados este partido (roja directa O doble amarilla)
-    # Nota: se extraen de los eventos porque fueron eliminados de jugadores_local mid-partido
+    # Se extraen de eventos porque fueron eliminados de jugadores_local mid-partido
     expulsados_ids = {
         e['jugador_id'] for e in eventos_partido
         if e['tipo'] in ('roja', 'doble_amarilla') and e['jugador_id']
     }
 
-    # Todos los que pisaron el campo en algún momento
-    participaron_ids = jugaron_ids | expulsados_ids
+    # Jugadores lesionados durante el partido (también eliminados de jugadores_local)
+    lesionados_ids = {
+        e['jugador_id'] for e in eventos_partido
+        if e['tipo'] == 'lesion' and e['jugador_id']
+    }
 
     for p in plantilla:
-        suspendido_antes = p.suspendido  # estado previo al partido
+        suspendido_antes = p.suspendido
+        recien_lesionado = False
 
         if p.jugador_id in expulsados_ids:
-            # ── Expulsado (roja o doble amarilla) ──────────────────────────
-            # Sale del campo y cumple sanción de 1 partido automáticamente
+            # ── Expulsado (roja o doble amarilla): sanción 1 partido ─────────
             p.suspendido = True
-            p.partidos_consecutivos += 1  # sí jugó una parte
+            p.partidos_consecutivos += 1
 
         elif p.jugador_id in jugaron_ids:
-            # ── Jugó y terminó el partido ───────────────────────────────────
+            # ── Jugó y terminó el partido ────────────────────────────────────
             p.partidos_consecutivos += 1
             jugador_data = next(
                 (j for j in jugadores_que_jugaron if j['jugador_id'] == p.jugador_id), None
             )
             if jugador_data:
-                if jugador_data.get('lesionado_en_partido'):
-                    p.lesionado = True
-                    p.jornadas_lesion = random.randint(1, 3)
-                else:
-                    # Acumular amarillas (solo si no se lesionó ni fue expulsado)
-                    amarillas = jugador_data.get('amarillas_en_partido', 0)
-                    p.amarillas_acumuladas += amarillas
-                    if p.amarillas_acumuladas >= 2:
-                        p.suspendido = True
-                        p.amarillas_acumuladas = 0  # reset al cumplir
+                amarillas = jugador_data.get('amarillas_en_partido', 0)
+                p.amarillas_acumuladas += amarillas
+                if p.amarillas_acumuladas >= 2:
+                    p.suspendido = True
+                    p.amarillas_acumuladas = 0
 
         else:
-            # ── No participó en este partido ────────────────────────────────
+            # ── No participó (suspendido, lesionado previo o se lesionó/expulsó) ─
             p.partidos_consecutivos = 0
-            # Si estaba suspendido ANTES del partido, ha cumplido su sanción → levantar
+            # Suspendido que cumple sanción → levantar
             if suspendido_antes:
                 p.suspendido = False
+            # Lesionado durante el partido: persistir en BD
+            if p.jugador_id in lesionados_ids:
+                p.lesionado = True
+                p.jornadas_lesion = random.randint(1, 3)
+                recien_lesionado = True
 
-        # Recuperación de lesión
-        if p.lesionado and p.jornadas_lesion > 0:
+        # Recuperación de lesión (no aplica al recién lesionado en este mismo partido)
+        if p.lesionado and p.jornadas_lesion > 0 and not recien_lesionado:
             p.jornadas_lesion -= 1
             if p.jornadas_lesion == 0:
                 p.lesionado = False
@@ -492,29 +489,6 @@ def simular_partido(partido_id, liga_id, app):
                     'walkover': True,
                 })
                 print(f"[!] Partido {partido_id} finalizado por walkover")
-                _verificar_jornada_completa(jornada_id, liga_id)
-                return
-
-            # Verificar alineación indebida
-            local_indebida     = _tiene_suspendido_en_once(equipo_local_id)
-            visitante_indebida = _tiene_suspendido_en_once(equipo_visitante_id)
-            if local_indebida or visitante_indebida:
-                if local_indebida and visitante_indebida:
-                    partido.goles_local, partido.goles_visitante = 0, 0
-                elif local_indebida:
-                    partido.goles_local, partido.goles_visitante = 0, 3
-                else:
-                    partido.goles_local, partido.goles_visitante = 3, 0
-                partido.estado = 'finalizado'
-                db.session.commit()
-                _actualizar_clasificacion(partido)
-                _emit_liga(liga_id, 'partido_finalizado', {
-                    'partido_id': partido_id,
-                    'goles_local': partido.goles_local,
-                    'goles_visitante': partido.goles_visitante,
-                    'alineacion_indebida': True,
-                })
-                print(f"[!] Partido {partido_id} finalizado por alineacion indebida")
                 _verificar_jornada_completa(jornada_id, liga_id)
                 return
 
@@ -730,7 +704,13 @@ def simular_partido(partido_id, liga_id, app):
 # ──────────────────────────────────────────────
 def _verificar_jornada_completa(jornada_id, liga_id):
     jornada = Jornada.query.get(jornada_id)
+    if not jornada or jornada.estado == 'finalizada':
+        return  # ya finalizada (p.ej. race condition entre dos partidos que acaban a la vez)
+
     partidos = Partido.query.filter_by(jornada_id=jornada_id).all()
+    if not partidos:
+        return  # guard: all([]) == True en Python, no finalizar una jornada sin partidos
+
     if all(p.estado == 'finalizado' for p in partidos):
         jornada.estado = 'finalizada'
         db.session.commit()

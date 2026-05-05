@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, current_app
 from app.models.mercado import Mercado
 from app.models.puja import Puja
 from app.models.jugador import Jugador
@@ -6,155 +6,17 @@ from app.models.equipo_real import EquipoReal
 from app.models.equipo_fantasy import EquipoFantasy
 from app.models.plantilla_equipo import PlantillaEquipo
 from app.models.liga_fantasy import LigaFantasy
-from app.extensions import db
-from flask_jwt_extended import jwt_required, get_jwt_identity
-from datetime import datetime, timedelta
-from sqlalchemy import and_
 from app.models.historial_transaccion import HistorialTransaccion
 from app.models.usuario import Usuario
 from app.models.participante_liga import ParticipanteLiga
-import random
+from app.extensions import db
+from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_pydantic import validate
+from app.schemas.mercado import RealizarPujaRequest
+from datetime import datetime
+from app.services.mercado_service import generar_jugadores_mercado
 
 bp = Blueprint('mercado', __name__, url_prefix='/api/mercado')
-
-# Configuración
-DURACION_SUBASTA_MINUTOS = 1  # Cada jugador dura 1 minuto en el mercado
-JUGADORES_EN_MERCADO = 10     # Número de jugadores simultáneos en el mercado
-
-def generar_jugadores_mercado(liga_id):
-    """
-    Genera jugadores aleatorios para el mercado de una liga
-    """
-    try:
-        liga = LigaFantasy.query.get(liga_id)
-        if not liga:
-            return
-        
-        # Eliminar jugadores expirados
-        now = datetime.utcnow()
-        mercados_expirados = Mercado.query.filter(
-            Mercado.liga_id == liga_id,
-            Mercado.fecha_expiracion <= now,
-            Mercado.activo == True
-        ).all()
-        
-        for mercado in mercados_expirados:
-            # Si hubo pujas, asignar al mejor postor
-            if mercado.mejor_postor_id:
-                procesar_ganador_subasta(mercado)
-            
-            # Marcar como inactivo
-            mercado.activo = False
-        
-        # Contar jugadores activos en el mercado
-        jugadores_activos = Mercado.query.filter_by(
-            liga_id=liga_id,
-            activo=True
-        ).count()
-        
-        # Añadir nuevos jugadores hasta llegar al límite
-        jugadores_a_añadir = JUGADORES_EN_MERCADO - jugadores_activos
-        
-        if jugadores_a_añadir > 0:
-            # Obtener jugadores ocupados en la liga
-            jugadores_ocupados = db.session.query(PlantillaEquipo.jugador_id).join(
-                EquipoFantasy, PlantillaEquipo.equipo_fantasy_id == EquipoFantasy.id
-            ).filter(
-                EquipoFantasy.liga_id == liga_id
-            ).all()
-            
-            jugadores_ocupados_ids = set([j[0] for j in jugadores_ocupados])
-            
-            # Obtener jugadores ya en el mercado
-            jugadores_en_mercado = db.session.query(Mercado.jugador_id).filter(
-                Mercado.liga_id == liga_id,
-                Mercado.activo == True
-            ).all()
-            
-            jugadores_en_mercado_ids = set([j[0] for j in jugadores_en_mercado])
-            
-            # Obtener jugadores disponibles de la competición
-            jugadores_disponibles = db.session.query(Jugador).join(
-                EquipoReal, Jugador.equipo_real_id == EquipoReal.id
-            ).filter(
-                EquipoReal.competicion_id == liga.competicion_id,
-                ~Jugador.id.in_(jugadores_ocupados_ids),
-                ~Jugador.id.in_(jugadores_en_mercado_ids)
-            ).all()
-            
-            # Seleccionar aleatoriamente
-            if len(jugadores_disponibles) >= jugadores_a_añadir:
-                nuevos_jugadores = random.sample(jugadores_disponibles, jugadores_a_añadir)
-                
-                fecha_expiracion = now + timedelta(minutes=DURACION_SUBASTA_MINUTOS)
-                
-                for jugador in nuevos_jugadores:
-                    nuevo_mercado = Mercado(
-                        liga_id=liga_id,
-                        jugador_id=jugador.id,
-                        precio_base=jugador.precio,
-                        precio_actual=jugador.precio,
-                        fecha_expiracion=fecha_expiracion
-                    )
-                    db.session.add(nuevo_mercado)
-        
-        db.session.commit()
-        
-    except Exception as e:
-        db.session.rollback()
-        print(f"ERROR generando mercado: {e}")
-        import traceback
-        traceback.print_exc()
-
-def procesar_ganador_subasta(mercado):
-    """
-    Procesa la asignación del jugador al ganador de la subasta
-    """
-    try:
-        equipo_ganador = EquipoFantasy.query.get(mercado.mejor_postor_id)
-        jugador = Jugador.query.get(mercado.jugador_id)
-        
-        if equipo_ganador and jugador:
-            print(f"DEBUG: Procesando subasta ganada")
-            print(f"DEBUG: Equipo ganador: {equipo_ganador.nombre} (ID: {equipo_ganador.id})")
-            print(f"DEBUG: Saldo antes: {equipo_ganador.saldo_disponible}")
-            print(f"DEBUG: Precio a pagar: {mercado.precio_actual}")
-            # Verificar que tenga saldo suficiente
-            if equipo_ganador.saldo_disponible >= mercado.precio_actual:
-                # Descontar dinero
-                equipo_ganador.saldo_disponible -= mercado.precio_actual
-                print(f"DEBUG: Saldo después: {equipo_ganador.saldo_disponible}")
-                
-                # Asignar jugador a la plantilla
-                nueva_plantilla = PlantillaEquipo(
-                    equipo_fantasy_id=equipo_ganador.id,
-                    jugador_id=mercado.jugador_id,
-                    es_titular=False,
-                    es_capitan=False
-                )
-                db.session.add(nueva_plantilla)
-                
-                # Registrar en el historial
-                historial = HistorialTransaccion(
-                    liga_id=mercado.liga_id,
-                    tipo='FICHAJE_MERCADO',
-                    equipo_fantasy_id=equipo_ganador.id,
-                    jugador_id=mercado.jugador_id,
-                    precio=mercado.precio_actual,
-                    descripcion=f"{equipo_ganador.nombre} fichó a {jugador.nombre} por {mercado.precio_actual}M"
-                )
-                db.session.add(historial)
-                
-                print(f"Jugador {mercado.jugador_id} asignado a equipo {equipo_ganador.id} por {mercado.precio_actual}M")
-            else:
-                print(f"❌ ERROR: Saldo insuficiente. Tiene {equipo_ganador.saldo_disponible}M, necesita {mercado.precio_actual}M")
-        else:
-            print(f"❌ ERROR: No se encontró equipo o jugador")
-        
-    except Exception as e:
-        print(f"ERROR procesando ganador: {e}")
-        import traceback
-        traceback.print_exc()
 
 @bp.route('/<int:liga_id>', methods=['GET'])
 @jwt_required()
@@ -203,21 +65,19 @@ def obtener_mercado(liga_id):
         return jsonify(resultado), 200
         
     except Exception as e:
-        print(f"ERROR obteniendo mercado: {e}")
-        import traceback
-        traceback.print_exc()
+        current_app.logger.exception("Error obteniendo mercado")
         return jsonify({'error': str(e)}), 500
 
 @bp.route('/<int:mercado_id>/pujar', methods=['POST'])
 @jwt_required()
-def realizar_puja(mercado_id):
+@validate()
+def realizar_puja(mercado_id, body: RealizarPujaRequest):
     """
     Realizar una puja por un jugador en el mercado
     """
     try:
         user_id = int(get_jwt_identity())
-        datos = request.get_json()
-        cantidad = float(datos.get('cantidad', 0))
+        cantidad = body.cantidad
         
         # Obtener mercado
         mercado = Mercado.query.get(mercado_id)
@@ -275,9 +135,7 @@ def realizar_puja(mercado_id):
         
     except Exception as e:
         db.session.rollback()
-        print(f"ERROR realizando puja: {e}")
-        import traceback
-        traceback.print_exc()
+        current_app.logger.exception("Error realizando puja")
         return jsonify({'error': str(e)}), 500
 
 @bp.route('/<int:liga_id>/mis-pujas', methods=['GET'])
@@ -319,7 +177,7 @@ def obtener_mis_pujas(liga_id):
         return jsonify(resultado), 200
         
     except Exception as e:
-        print(f"ERROR obteniendo pujas: {e}")
+        current_app.logger.exception("Error obteniendo pujas")
         return jsonify({'error': str(e)}), 500
     
 @bp.route('/<int:liga_id>/historial', methods=['GET'])
@@ -377,7 +235,5 @@ def obtener_historial(liga_id):
         return jsonify(resultado), 200
         
     except Exception as e:
-        print(f"ERROR obteniendo historial: {e}")
-        import traceback
-        traceback.print_exc()
+        current_app.logger.exception("Error obteniendo historial")
         return jsonify({'error': str(e)}), 500

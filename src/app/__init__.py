@@ -81,15 +81,17 @@ def create_app():
     app.register_blueprint(simulacion_bp)
 
     # Registrar socket handlers
-    from app import socket_handlers
+    from app.sockets import handlers as socket_handlers
     socket_handlers.init_app(socketio)
 
-    # Iniciar scheduler (tick cada 60 segundos)
+    # Iniciar scheduler
     from apscheduler.schedulers.background import BackgroundScheduler
-    from app.simulacion_service import tick_scheduler, set_socketio
+    from app.services.simulacion_service import tick_scheduler, set_socketio
+    from app.services.mercado_service import tick_mercado
     set_socketio(socketio)
     scheduler = BackgroundScheduler()
     scheduler.add_job(tick_scheduler, 'interval', seconds=60, args=[app])
+    scheduler.add_job(tick_mercado, 'interval', seconds=30, args=[app])
     scheduler.start()
     print("Scheduler iniciado")
 

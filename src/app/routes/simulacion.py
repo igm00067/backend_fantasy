@@ -12,74 +12,10 @@ from app.models.equipo_fantasy import EquipoFantasy
 from app.models.plantilla_equipo import PlantillaEquipo
 from app.models.jugador import Jugador
 from app.models.usuario import Usuario
+from app.services.simulacion_service import generar_calendario_sync, simular_partido
 import threading
 
 bp = Blueprint('simulacion', __name__, url_prefix='/api/ligas')
-
-
-def _generar_calendario_sync(liga_id):
-    """Genera el calendario directamente en el contexto de la petición actual."""
-    from datetime import datetime, timedelta
-    import random as _random
-
-    liga = LigaFantasy.query.get(liga_id)
-    if not liga:
-        return
-
-    equipos = EquipoFantasy.query.filter_by(liga_id=liga_id).all()
-    n = len(equipos)
-    if n < 2:
-        print(f"⚠ Liga {liga_id}: solo {n} equipo(s), no se puede generar calendario")
-        return
-    if n % 2 != 0:
-        print(f"⚠ Liga {liga_id}: número impar de equipos ({n}). Un equipo descansará cada jornada.")
-
-    ids = [e.id for e in equipos]
-    if n % 2 != 0:
-        ids.append(None)
-    m = len(ids)
-
-    jornadas_ida = []
-    lista = ids[:]
-    for _ in range(m - 1):
-        enfrentamientos = []
-        for i in range(m // 2):
-            local = lista[i]
-            visitante = lista[m - 1 - i]
-            if local is not None and visitante is not None:
-                enfrentamientos.append((local, visitante))
-        jornadas_ida.append(enfrentamientos)
-        lista = [lista[0]] + [lista[-1]] + lista[1:-1]
-
-    jornadas_vuelta = [[(v, l) for l, v in j] for j in jornadas_ida]
-    todas = jornadas_ida + jornadas_vuelta
-
-    now = datetime.utcnow()
-    delta = timedelta(minutes=liga.duracion_jornada_minutos)
-
-    for num, enfrentamientos in enumerate(todas, start=1):
-        fecha_inicio = now + (num - 1) * delta
-        jornada = Jornada(
-            liga_fantasy_id=liga_id,
-            numero=num,
-            fecha_inicio=fecha_inicio,
-            fecha_fin=fecha_inicio + delta,
-            estado='pendiente',
-        )
-        db.session.add(jornada)
-        db.session.flush()
-
-        for local_id, visitante_id in enfrentamientos:
-            db.session.add(Partido(
-                jornada_id=jornada.id,
-                equipo_local_id=local_id,
-                equipo_visitante_id=visitante_id,
-                estado='pendiente',
-            ))
-
-    liga.estado = 'en_curso'
-    db.session.commit()
-    print(f"✅ Calendario generado para liga {liga_id}: {len(todas)} jornadas")
 
 
 # ─────────────────────────────────────────────
@@ -124,7 +60,7 @@ def confirmar_inicio(liga_id):
                     'confirmados': confirmados,
                     'total': total,
                 }), 400
-            _generar_calendario_sync(liga_id)
+            generar_calendario_sync(liga_id)
 
         return jsonify({
             'mensaje': 'Confirmación registrada',
@@ -320,14 +256,29 @@ def detalle_partido(partido_id):
         minuto_actual = max((e.minuto for e in eventos_list), default=0) \
             if partido.estado in ('primer_tiempo', 'segundo_tiempo') else None
 
-        # Obtener jugadores de cada equipo con su estado
+        # Obtener jugadores de cada equipo con su estado,
+        # reflejando los cambios ya aplicados en la simulación
         def plantilla_con_estado(equipo_id):
+            cambios_aplicados = CambioDescanso.query.filter_by(
+                partido_id=partido_id,
+                equipo_id=equipo_id,
+                aplicado=True,
+            ).all()
+            sale_ids  = {c.jugador_sale_id  for c in cambios_aplicados}
+            entra_ids = {c.jugador_entra_id for c in cambios_aplicados}
+
             plantilla = PlantillaEquipo.query.filter_by(equipo_fantasy_id=equipo_id).all()
             resultado = []
             for p in plantilla:
                 j = Jugador.query.get(p.jugador_id)
                 if j:
-                    resultado.append({**j.to_dict(), **p.to_dict()})
+                    data = {**j.to_dict(), **p.to_dict()}
+                    # Ajustar es_titular según cambios aplicados
+                    if p.jugador_id in sale_ids:
+                        data['es_titular'] = False   # salió del campo
+                    elif p.jugador_id in entra_ids:
+                        data['es_titular'] = True    # entró como sustituto
+                    resultado.append(data)
             return resultado
 
         return jsonify({
@@ -422,7 +373,6 @@ def simular_jornada_manual(liga_id):
         if not partidos_pendientes:
             return jsonify({'error': 'Todos los partidos de esta jornada ya están en curso o finalizados'}), 400
 
-        from app.simulacion_service import simular_partido as _simular
         app = current_app._get_current_object()
 
         jornada.estado = 'en_curso'
@@ -430,7 +380,7 @@ def simular_jornada_manual(liga_id):
 
         for partido in partidos_pendientes:
             t = threading.Thread(
-                target=_simular,
+                target=simular_partido,
                 args=(partido.id, liga_id, app),
                 daemon=True,
             )

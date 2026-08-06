@@ -1,3 +1,26 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# routes/simulacion.py — Endpoints de control de simulación y calendario
+#
+# Prefijo: /api/ligas (comparte prefijo con ligas.py pero es un blueprint separado)
+# Todos los endpoints requieren JWT.
+#
+# Endpoints de inicio de liga:
+#   POST   /api/ligas/<id>/confirmar-inicio    — El usuario confirma que está listo para empezar
+#   DELETE /api/ligas/<id>/confirmar-inicio    — Retirar la confirmación
+#   GET    /api/ligas/<id>/estado-inicio       — Ver quién ha confirmado y quién no
+#
+# Endpoints de calendario y partidos:
+#   GET    /api/ligas/<id>/calendario          — Todas las jornadas y partidos de la liga
+#   GET    /api/ligas/<id>/jornada-actual      — Jornada en curso (o siguiente pendiente)
+#   GET    /api/ligas/partidos/<partido_id>    — Detalle completo de un partido con eventos
+#   POST   /api/ligas/<id>/partidos/<pid>/cambios-descanso — Solicitar sustituciones
+#   POST   /api/ligas/<id>/simular-jornada     — Forzar simulación de la próxima jornada (testing)
+#
+# Flujo de inicio:
+#   1. Todos los usuarios del estado 'pendiente' pulsan confirmar-inicio
+#   2. Cuando confirmados == total_activos, se llama generar_calendario_sync()
+#   3. La liga pasa a 'en_curso' y APScheduler lanza las jornadas automáticamente
+# ─────────────────────────────────────────────────────────────────────────────
 from flask import Blueprint, jsonify, request, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.extensions import db
@@ -135,6 +158,8 @@ def estado_inicio(liga_id):
             'confirmados': len(confirmaciones),
             'total': len(participantes),
             'yo_confirme': user_id in confirmados_ids,
+            'creador_id': liga.creador_id,
+            'mi_usuario_id': user_id,
         }), 200
 
     except Exception as e:

@@ -1,3 +1,34 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# sockets/handlers.py — Manejadores de eventos Socket.IO
+#
+# Registra todos los eventos WebSocket del servidor. Se inicializa desde
+# create_app() con socket_handlers.init_app(socketio).
+#
+# Sistema de "rooms" (salas):
+#   user_{id}        — sala personal de cada usuario (notificaciones privadas)
+#   liga_{id}        — sala de la liga (eventos de simulación en tiempo real)
+#   conv_{id}        — sala de conversación (indicador de escritura)
+#
+# Eventos que escucha el servidor (cliente → servidor):
+#   connect          — conexión inicial; requiere token JWT en auth; une al user a user_{id}
+#   disconnect       — desconexión del cliente
+#   send_message     — enviar mensaje de texto a una conversación (guarda en BD + reenvía)
+#   typing           — indicar que el usuario está escribiendo (se reenvía al otro)
+#   join_conversation — unirse a la sala conv_{id}
+#   leave_conversation — salir de la sala conv_{id}
+#   join_liga        — unirse a la sala liga_{id} para recibir eventos de simulación
+#   leave_liga       — salir de la sala liga_{id}
+#
+# Eventos que emite el servidor (servidor → cliente):
+#   connected        — confirmación de conexión exitosa
+#   message_sent     — confirmación al remitente de que el mensaje se envió
+#   new_message      — mensaje nuevo para el destinatario
+#   user_typing      — notificación de "está escribiendo..." al otro usuario
+#   partido_estado / partido_evento / partido_minuto / partido_descanso / partido_finalizado
+#                    — eventos de simulación emitidos desde simulacion_service.py
+#   mercado_ganado / oferta_resuelta / resultado_partido / posicion_final
+#                    — notificaciones personales (emitidas a user_{id})
+# ─────────────────────────────────────────────────────────────────────────────
 from flask_socketio import emit, join_room, leave_room, disconnect
 from flask_jwt_extended import decode_token
 from app.models.conversacion import Conversacion
@@ -7,12 +38,13 @@ from app.models.participante_liga import ParticipanteLiga
 from app.extensions import db
 from datetime import datetime
 
-# Variable global para almacenar el socketio
+# Referencia global al objeto SocketIO (para posibles usos futuros)
 socketio_instance = None
 
 def init_app(socketio):
     """
-    Inicializa los event handlers de SocketIO
+    Registra todos los event handlers de Socket.IO en el objeto socketio.
+    Llamado desde create_app() después de crear el socketio.
     """
     global socketio_instance
     socketio_instance = socketio
@@ -20,7 +52,13 @@ def init_app(socketio):
     @socketio.on('connect')
     def handle_connect(auth):
         """
-        Maneja la conexión de un cliente
+        Evento 'connect': se dispara cuando un cliente establece la conexión WebSocket.
+
+        El cliente envía el JWT en el campo auth: { token: '...' }
+        Se decodifica para obtener el user_id y se une automáticamente a la sala
+        personal 'user_{user_id}' para recibir notificaciones privadas.
+
+        Devuelve False para rechazar la conexión si el token falta o es inválido.
         """
         try:
             print(f"\n{'='*60}")
@@ -63,7 +101,20 @@ def init_app(socketio):
     @socketio.on('send_message')
     def handle_send_message(data):
         """
-        Maneja el envío de un mensaje
+        Evento 'send_message': el cliente envía un mensaje de texto a una conversación.
+
+        Data: { conversacion_id, contenido, token }
+
+        Flujo:
+        1. Decodifica el token para obtener user_id
+        2. Verifica que la conversación existe y el usuario es parte de ella
+        3. Verifica que ninguno de los dos ha abandonado la liga
+        4. Crea el Mensaje en BD (tipo='TEXTO')
+        5. Emite 'message_sent' al remitente (confirmación)
+        6. Emite 'new_message' al destinatario (room user_{id})
+
+        Los mensajes de tipo OFERTA NO se crean por este evento; se crean
+        por HTTP en POST /api/chat/oferta/crear (que también emite new_message).
         """
         try:
             print(f"\n{'='*60}")
@@ -167,7 +218,10 @@ def init_app(socketio):
     @socketio.on('typing')
     def handle_typing(data):
         """
-        Maneja el evento de "escribiendo..."
+        Evento 'typing': notifica al otro usuario que el remitente está escribiendo.
+        Data: { conversacion_id, token, is_typing: bool }
+        Re-emite 'user_typing' al room user_{destinatario_id} con { conversacion_id, user_id, is_typing }.
+        El cliente Flutter lo usa para mostrar "..." en el chat.
         """
         try:
             conversacion_id = data.get('conversacion_id')
@@ -229,7 +283,12 @@ def init_app(socketio):
 
     @socketio.on('join_liga')
     def handle_join_liga(data):
-        """Une al usuario a la sala de su liga para recibir eventos de simulación."""
+        """
+        Evento 'join_liga': une al usuario a la sala liga_{liga_id}.
+        Desde este momento recibirá todos los eventos de simulación:
+        partido_estado, partido_evento, partido_minuto, jornada_finalizada, etc.
+        Data: { liga_id, token }
+        """
         try:
             liga_id = data.get('liga_id')
             token = data.get('token')

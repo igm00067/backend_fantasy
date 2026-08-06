@@ -1,16 +1,33 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# models/cambio_descanso.py — Solicitud de sustitución durante un partido
+#
+# Tabla: cambios_descanso
+# El usuario puede solicitar sustituciones en cualquier momento del partido
+# (descanso, primer tiempo, segundo tiempo) con un máximo de 5 por partido.
+# Las solicitudes se guardan aquí con aplicado=False.
+#
+# La simulación aplica los cambios pendientes al inicio de cada chunk de 5 min
+# mediante _aplicar_cambios_pendientes(). Cuando se aplica un cambio:
+#   - aplicado pasa a True
+#   - Se crea un EventoPartido de tipo 'cambio'
+#   - El jugador que sale se elimina de jugadores_local/visitante en memoria
+#   - El jugador que entra se añade desde suplentes
+#
+# Endpoint: POST /api/ligas/<liga_id>/partidos/<partido_id>/cambios-descanso
+# ─────────────────────────────────────────────────────────────────────────────
 from app.extensions import db
 from datetime import datetime
 
 class CambioDescanso(db.Model):
     __tablename__ = 'cambios_descanso'
 
-    id = db.Column(db.Integer, primary_key=True)
-    partido_id = db.Column(db.Integer, db.ForeignKey('partidos.id'), nullable=False)
-    equipo_id = db.Column(db.Integer, db.ForeignKey('equipos_fantasy.id'), nullable=False)
-    jugador_sale_id = db.Column(db.Integer, db.ForeignKey('jugadores.id'), nullable=False)
-    jugador_entra_id = db.Column(db.Integer, db.ForeignKey('jugadores.id'), nullable=False)
-    aplicado = db.Column(db.Boolean, default=False)
-    creado_at = db.Column(db.DateTime, default=datetime.utcnow)
+    id               = db.Column(db.Integer, primary_key=True)
+    partido_id       = db.Column(db.Integer, db.ForeignKey('partidos.id'),          nullable=False)
+    equipo_id        = db.Column(db.Integer, db.ForeignKey('equipos_fantasy.id'),   nullable=False)
+    jugador_sale_id  = db.Column(db.Integer, db.ForeignKey('jugadores.id'),          nullable=False)  # titular que sale
+    jugador_entra_id = db.Column(db.Integer, db.ForeignKey('jugadores.id'),          nullable=False)  # suplente que entra
+    aplicado         = db.Column(db.Boolean, default=False)   # True una vez que la simulación lo procesa
+    creado_at        = db.Column(db.DateTime, default=datetime.utcnow)
 
     def to_dict(self):
         return {

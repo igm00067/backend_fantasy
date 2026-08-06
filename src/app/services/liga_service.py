@@ -1,3 +1,10 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# services/liga_service.py — Lógica de negocio para la creación de ligas
+#
+# Contiene la función que asigna jugadores aleatorios al equipo de un usuario
+# cuando crea o se une a una liga. Garantiza que no se repitan jugadores entre
+# equipos de la misma liga.
+# ─────────────────────────────────────────────────────────────────────────────
 import random
 from app.models.equipo_fantasy import EquipoFantasy
 from app.models.plantilla_equipo import PlantillaEquipo
@@ -8,10 +15,17 @@ from app.extensions import db
 
 def asignar_jugadores_aleatorios(equipo_fantasy_id, competicion_id, liga_id):
     """
-    Asigna 15 jugadores aleatorios al equipo fantasy:
-    - 2 Porteros, 5 Defensas, 5 Centrocampistas, 3 Delanteros
-    Solo asigna jugadores que no estén ya en otro equipo de la misma liga.
-    Lanza Exception si no hay suficientes jugadores. El commit lo hace el caller.
+    Asigna 15 jugadores aleatorios al equipo fantasy recién creado:
+      - 2 Porteros (POR)
+      - 5 Defensas (DEF)
+      - 5 Centrocampistas (MED)
+      - 3 Delanteros (DEL)
+
+    Solo considera jugadores de la competición de la liga (competicion_id)
+    que NO estén ya asignados a otro equipo de esta misma liga.
+
+    Si no hay suficientes jugadores libres lanza Exception (el caller
+    hace rollback). El commit final lo hace el caller (crear_liga o unirse_a_liga).
     """
     jugadores_ocupados = db.session.query(PlantillaEquipo.jugador_id).join(
         EquipoFantasy, PlantillaEquipo.equipo_fantasy_id == EquipoFantasy.id

@@ -1,5 +1,18 @@
 """
-Lógica de negocio para el chat y el sistema de ofertas de intercambio.
+services/chat_service.py — Lógica de negocio para traspasos directos entre equipos
+
+Contiene la función ejecutar_intercambio() que se invoca cuando el destinatario
+acepta una oferta de jugador. Transfiere jugadores y dinero entre equipos y
+registra dos entradas en el historial (una por cada parte).
+
+Flujo de una oferta aceptada:
+1. routes/chat.py::responder_oferta() recibe POST /api/chat/oferta/<id>/responder
+2. Si accion == 'ACEPTAR' → llama ejecutar_intercambio(oferta)
+3. ejecutar_intercambio() valida presupuestos, mueve jugadores en PlantillaEquipo,
+   ajusta saldos de ambos equipos, y registra en HistorialTransaccion
+4. Si ejecutar_intercambio() devuelve None → éxito
+5. Si devuelve un string → error (la oferta se marca como RECHAZADA automáticamente)
+6. En cualquier caso se emite 'oferta_resuelta' por Socket.IO a ambas partes
 """
 from datetime import datetime
 from app.extensions import db
@@ -83,23 +96,41 @@ def ejecutar_intercambio(oferta):
     liga_id = remitente_equipo.liga_id
 
     if oferta.jugador_ofrecido_id:
+        j = Jugador.query.get(oferta.jugador_ofrecido_id)
+        nombre_j = j.nombre if j else 'Jugador'
+        precio_op = float(oferta.dinero_solicitado or 0)
         db.session.add(HistorialTransaccion(
-            liga_id=liga_id,
-            tipo='FICHAJE_MERCADO',
+            liga_id=liga_id, tipo='VENTA',
+            equipo_fantasy_id=remitente_equipo.id,
+            jugador_id=oferta.jugador_ofrecido_id,
+            precio=precio_op,
+            descripcion=f'Venta: {nombre_j} a {destinatario_equipo.nombre} por {precio_op}M'
+        ))
+        db.session.add(HistorialTransaccion(
+            liga_id=liga_id, tipo='TRASPASO',
             equipo_fantasy_id=destinatario_equipo.id,
             jugador_id=oferta.jugador_ofrecido_id,
-            precio=oferta.dinero_ofrecido,
-            descripcion=f'Intercambio: recibido de {remitente_equipo.nombre}'
+            precio=precio_op,
+            descripcion=f'Traspaso: {nombre_j} comprado a {remitente_equipo.nombre} por {precio_op}M'
         ))
 
     if oferta.jugador_solicitado_id:
+        j = Jugador.query.get(oferta.jugador_solicitado_id)
+        nombre_j = j.nombre if j else 'Jugador'
+        precio_op = float(oferta.dinero_ofrecido or 0)
         db.session.add(HistorialTransaccion(
-            liga_id=liga_id,
-            tipo='FICHAJE_MERCADO',
+            liga_id=liga_id, tipo='TRASPASO',
             equipo_fantasy_id=remitente_equipo.id,
             jugador_id=oferta.jugador_solicitado_id,
-            precio=oferta.dinero_solicitado,
-            descripcion=f'Intercambio: recibido de {destinatario_equipo.nombre}'
+            precio=precio_op,
+            descripcion=f'Traspaso: {nombre_j} comprado a {destinatario_equipo.nombre} por {precio_op}M'
+        ))
+        db.session.add(HistorialTransaccion(
+            liga_id=liga_id, tipo='VENTA',
+            equipo_fantasy_id=destinatario_equipo.id,
+            jugador_id=oferta.jugador_solicitado_id,
+            precio=precio_op,
+            descripcion=f'Venta: {nombre_j} a {remitente_equipo.nombre} por {precio_op}M'
         ))
 
     return None  # sin error

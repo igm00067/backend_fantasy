@@ -1,3 +1,23 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# routes/mercado.py — Endpoints del mercado de subastas
+#
+# Prefijo: /api/mercado
+# Todos los endpoints requieren JWT.
+#
+# Endpoints:
+#   GET  /api/mercado/<liga_id>              — Jugadores en subasta (también regenera el mercado)
+#   POST /api/mercado/<mercado_id>/pujar     — Realizar una puja por un jugador
+#   GET  /api/mercado/<liga_id>/mis-pujas   — Pujas activas del usuario en esta liga
+#   GET  /api/mercado/<liga_id>/historial   — Historial de transacciones de la liga
+#
+# Funcionamiento del mercado:
+#   - Al cargar la pantalla, GET /api/mercado/<liga_id> llama a generar_jugadores_mercado()
+#     que expira subastas caducadas y rellena hasta 10 jugadores activos.
+#   - El usuario puja con POST /api/mercado/<id>/pujar indicando la cantidad en millones.
+#   - La puja debe superar el precio actual. El saldo NO se bloquea al pujar;
+#     se descuenta solo si ganas la subasta al expirar (en tick_mercado).
+#   - tick_mercado (scheduler cada 30s) procesa automáticamente las subastas expiradas.
+# ─────────────────────────────────────────────────────────────────────────────
 from flask import Blueprint, jsonify, request, current_app
 from app.models.mercado import Mercado
 from app.models.puja import Puja

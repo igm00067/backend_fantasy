@@ -1,3 +1,23 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# routes/ligas.py — Endpoints de gestión de ligas
+#
+# Prefijo: /api/ligas
+# Todos los endpoints requieren JWT (usuario autenticado).
+#
+# Endpoints:
+#   POST   /api/ligas                              — Crear nueva liga
+#   GET    /api/ligas/mis-ligas                    — Ligas del usuario autenticado
+#   POST   /api/ligas/unirse                       — Unirse a una liga con código de invitación
+#   GET    /api/ligas/<id>                         — Detalle de una liga
+#   GET    /api/ligas/<id>/mi-equipo               — Equipo y plantilla del usuario en la liga
+#   POST   /api/ligas/<id>/mi-equipo/alineacion    — Guardar alineación titular y formación
+#   GET    /api/ligas/<id>/clasificacion           — Tabla de clasificación ordenada
+#   GET    /api/ligas/<id>/equipo/<usuario_id>     — Ver equipo de otro participante (solo lectura)
+#   GET    /api/ligas/<id>/propiedad-jugadores     — Mapa {jugador_id: equipo_nombre} de la liga
+#   POST   /api/ligas/<id>/mi-equipo/vender-jugador — Vender jugador al mercado libre
+#   POST   /api/ligas/<id>/abandonar               — Abandonar la liga (libera jugadores)
+#   POST   /api/ligas/<id>/expulsar/<usuario_id>   — Expulsar miembro (solo creador)
+# ─────────────────────────────────────────────────────────────────────────────
 from flask import Blueprint, jsonify, request, current_app
 from app.models.liga_fantasy import LigaFantasy
 from app.models.participante_liga import ParticipanteLiga
@@ -507,6 +527,19 @@ def abandonar_liga(liga_id):
         )
         db.session.add(historial)
 
+        # Si el creador abandona, transferir el rol al siguiente miembro por fecha de unión
+        liga = LigaFantasy.query.get(liga_id)
+        if liga and liga.creador_id == user_id:
+            siguiente = ParticipanteLiga.query.filter_by(
+                liga_id=liga_id, abandonado=False
+            ).filter(
+                ParticipanteLiga.usuario_id != user_id
+            ).order_by(
+                ParticipanteLiga.fecha_union.asc()
+            ).first()
+            if siguiente:
+                liga.creador_id = siguiente.usuario_id
+
         db.session.commit()
 
         return jsonify({
@@ -516,4 +549,66 @@ def abandonar_liga(liga_id):
     except Exception as e:
         db.session.rollback()
         current_app.logger.exception("Error abandonando liga")
+        return jsonify({'error': str(e)}), 500
+
+
+@bp.route('/<int:liga_id>/expulsar/<int:usuario_id>', methods=['POST'])
+@jwt_required()
+def expulsar_participante(liga_id, usuario_id):
+    """
+    El creador puede expulsar a otro miembro de la liga.
+    Mismas consecuencias que abandonar: se liberan sus jugadores.
+    """
+    try:
+        user_id = int(get_jwt_identity())
+
+        liga = LigaFantasy.query.get_or_404(liga_id)
+
+        if liga.creador_id != user_id:
+            return jsonify({'error': 'Solo el creador puede expulsar miembros'}), 403
+
+        if usuario_id == user_id:
+            return jsonify({'error': 'No puedes expulsarte a ti mismo. Usa "Abandonar liga".'}), 400
+
+        participante = ParticipanteLiga.query.filter_by(
+            liga_id=liga_id, usuario_id=usuario_id, abandonado=False
+        ).first()
+        if not participante:
+            return jsonify({'error': 'Este usuario no es parte activa de la liga'}), 404
+
+        equipo = EquipoFantasy.query.filter_by(
+            liga_id=liga_id, usuario_id=usuario_id
+        ).first()
+        if not equipo:
+            return jsonify({'error': 'El usuario no tiene equipo en esta liga'}), 404
+
+        usuario_expulsado = Usuario.query.get(usuario_id)
+        nombre_expulsado = usuario_expulsado.nombre if usuario_expulsado else 'Usuario'
+
+        plantilla_items = PlantillaEquipo.query.filter_by(equipo_fantasy_id=equipo.id).all()
+        for item in plantilla_items:
+            db.session.delete(item)
+
+        participante.abandonado = True
+        participante.fecha_abandono = datetime.utcnow()
+
+        historial = HistorialTransaccion(
+            liga_id=liga_id,
+            tipo='EXPULSION',
+            equipo_fantasy_id=equipo.id,
+            jugador_id=None,
+            precio=0,
+            descripcion=f'{nombre_expulsado} ha sido expulsado de la liga por el creador'
+        )
+        db.session.add(historial)
+
+        db.session.commit()
+
+        return jsonify({
+            'mensaje': f'{nombre_expulsado} ha sido expulsado de la liga'
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.exception("Error expulsando participante")
         return jsonify({'error': str(e)}), 500

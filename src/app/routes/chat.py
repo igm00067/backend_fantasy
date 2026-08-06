@@ -1,3 +1,27 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# routes/chat.py — Endpoints del sistema de chat y ofertas de traspaso
+#
+# Prefijo: /api/chat
+# Todos los endpoints requieren JWT.
+#
+# Endpoints:
+#   GET  /api/chat/conversaciones/<liga_id>            — Lista de conversaciones del usuario
+#   GET  /api/chat/conversacion/<otro_id>/<liga_id>    — Obtener/crear conversación con otro usuario
+#   GET  /api/chat/mensajes/<conversacion_id>          — Mensajes de una conversación (marca leídos)
+#   POST /api/chat/oferta/crear                        — Proponer un traspaso de jugador
+#   POST /api/chat/oferta/<id>/responder               — Aceptar/rechazar oferta de traspaso
+#
+# Sistema de mensajería en tiempo real:
+#   - Los mensajes de texto se envían por Socket.IO (evento 'send_message' desde el cliente)
+#     y se guardan en BD en handlers.py
+#   - Las ofertas de jugador se crean por HTTP (POST /oferta/crear) y se notifican
+#     al destinatario por Socket.IO (evento 'new_message' → room 'user_{id}')
+#   - Al responder una oferta, se emite 'oferta_resuelta' a ambas partes
+#
+# Tipos de mensaje:
+#   TEXTO  — mensaje normal (creado por Socket.IO en handlers.py)
+#   OFERTA — propuesta de traspaso (creada por HTTP en este blueprint)
+# ─────────────────────────────────────────────────────────────────────────────
 from flask import Blueprint, jsonify, request, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from flask_pydantic import validate
@@ -351,6 +375,24 @@ def responder_oferta(oferta_id, body: ResponderOfertaRequest):
         oferta.estado = 'ACEPTADA' if accion == 'ACEPTAR' else 'RECHAZADA'
         oferta.fecha_respuesta = datetime.utcnow()
         db.session.commit()
+
+        # Notificar resultado a ambas partes vía Socket.IO
+        try:
+            remitente_equipo = EquipoFantasy.query.get(oferta.remitente_id)
+            jugador_id = oferta.jugador_solicitado_id or oferta.jugador_ofrecido_id
+            jugador = Jugador.query.get(jugador_id) if jugador_id else None
+            notif_data = {
+                'oferta_id': oferta.id,
+                'estado': oferta.estado,
+                'jugador_nombre': jugador.nombre if jugador else None,
+                'precio': float(oferta.dinero_ofrecido or 0),
+            }
+            socketio = current_app.extensions['socketio']
+            if remitente_equipo:
+                socketio.emit('oferta_resuelta', notif_data, room=f'user_{remitente_equipo.usuario_id}')
+            socketio.emit('oferta_resuelta', notif_data, room=f'user_{destinatario_equipo.usuario_id}')
+        except Exception as socket_error:
+            current_app.logger.warning(f"WebSocket error en responder_oferta: {socket_error}")
 
         return jsonify({
             'oferta_id': oferta.id,

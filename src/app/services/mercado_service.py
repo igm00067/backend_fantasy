@@ -1,3 +1,18 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# services/mercado_service.py — Lógica del mercado de subastas
+#
+# El mercado funciona con subastas de tiempo limitado (DURACION_SUBASTA_MINUTOS).
+# tick_mercado() es llamado por APScheduler cada 30 segundos y gestiona todo:
+#   1. Expira subastas caducadas y asigna jugadores a sus ganadores
+#   2. Rellena el mercado con nuevos jugadores libres hasta JUGADORES_EN_MERCADO
+#
+# Flujo completo de una subasta:
+#   1. generar_jugadores_mercado() crea filas en Mercado con fecha_expiracion
+#   2. Los usuarios hacen pujas (POST /api/mercado/<id>/pujar)
+#   3. tick_mercado detecta que fecha_expiracion <= now y activo=True
+#   4. Si hay mejor_postor_id → procesar_ganador_subasta() asigna el jugador
+#   5. mercado.activo = False, se notifica al ganador por Socket.IO
+# ─────────────────────────────────────────────────────────────────────────────
 import random
 from datetime import datetime, timedelta
 from app.models.mercado import Mercado
@@ -9,12 +24,23 @@ from app.models.liga_fantasy import LigaFantasy
 from app.models.historial_transaccion import HistorialTransaccion
 from app.extensions import db
 
-DURACION_SUBASTA_MINUTOS = 1
-JUGADORES_EN_MERCADO = 10
+DURACION_SUBASTA_MINUTOS = 1   # duración de cada subasta en el mercado
+JUGADORES_EN_MERCADO = 10      # número máximo de jugadores en subasta simultáneamente
 
 
 def procesar_ganador_subasta(mercado):
-    """Asigna el jugador al ganador de la subasta y descuenta su saldo."""
+    """
+    Asigna el jugador ganado al equipo mejor postor y actualiza su saldo.
+
+    Pasos:
+    1. Obtiene el equipo ganador y el jugador subastado
+    2. Verifica que el equipo tiene saldo suficiente (segunda verificación de seguridad)
+    3. Descuenta el precio del saldo del equipo
+    4. Crea una fila en PlantillaEquipo (el jugador pasa a pertenecer al equipo)
+    5. Registra la transacción en HistorialTransaccion
+    6. Emite evento 'mercado_ganado' al room 'user_{usuario_id}' por Socket.IO
+       → Flutter recibe la notificación push "Fichaje completado"
+    """
     try:
         equipo_ganador = EquipoFantasy.query.get(mercado.mejor_postor_id)
         jugador = Jugador.query.get(mercado.jugador_id)
@@ -44,6 +70,20 @@ def procesar_ganador_subasta(mercado):
             precio=mercado.precio_actual,
             descripcion=f"{equipo_ganador.nombre} fichó a {jugador.nombre} por {mercado.precio_actual}M"
         ))
+        db.session.commit()
+
+        # Notificar al ganador vía Socket.IO
+        try:
+            from flask import current_app
+            socketio = current_app.extensions.get('socketio')
+            if socketio and equipo_ganador.usuario_id:
+                socketio.emit('mercado_ganado', {
+                    'jugador_nombre': jugador.nombre,
+                    'precio': float(mercado.precio_actual),
+                    'liga_id': mercado.liga_id,
+                }, room=f'user_{equipo_ganador.usuario_id}')
+        except Exception:
+            pass
 
     except Exception as e:
         import traceback
@@ -52,7 +92,21 @@ def procesar_ganador_subasta(mercado):
 
 
 def generar_jugadores_mercado(liga_id):
-    """Rota jugadores del mercado: expira los caducados y añade nuevos hasta el límite."""
+    """
+    Rota el mercado de una liga: expira subastas caducadas y rellena con nuevos jugadores.
+
+    Se llama en dos contextos:
+    1. GET /api/mercado/<liga_id> — al cargar la pantalla del mercado
+    2. tick_mercado (scheduler cada 30s) — de forma automática en segundo plano
+
+    Lógica:
+    - Busca entradas en Mercado con fecha_expiracion <= now y activo=True
+    - Para cada una: si tiene mejor_postor → asigna jugador; en cualquier caso activo=False
+    - Cuenta los activos restantes, calcula cuántos faltan hasta JUGADORES_EN_MERCADO
+    - Obtiene jugadores disponibles: de la competición de la liga, no en ninguna plantilla,
+      y no ya en el mercado activo de esta liga
+    - Crea nuevas entradas en Mercado con fecha_expiracion = now + DURACION_SUBASTA_MINUTOS
+    """
     try:
         liga = LigaFantasy.query.get(liga_id)
         if not liga:
@@ -113,7 +167,12 @@ def generar_jugadores_mercado(liga_id):
 
 
 def tick_mercado(app):
-    """Rota el mercado de todas las ligas activas. Llamado por el scheduler."""
+    """
+    Llamado por APScheduler cada 30 segundos.
+    Recorre todas las ligas en estado 'en_curso' y actualiza su mercado.
+    Necesita app como argumento para abrir un contexto de aplicación Flask
+    (los schedulers corren fuera del contexto de petición HTTP).
+    """
     with app.app_context():
         ligas = LigaFantasy.query.filter_by(estado='en_curso').all()
         for liga in ligas:

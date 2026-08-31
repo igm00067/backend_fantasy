@@ -319,8 +319,8 @@ def _calcular_fuerza(jugadores, chunk_num=0, factor_forma=1.0):
     2. factor_numerico: 0.90^max(0, 11-len(jugadores)) → -10% por cada expulsado
     3. factor_forma:    0.95-1.05 según racha reciente de resultados
 
-    Cálculo de ataque:  60% tiro de delanteros + 40% pase de centrocampistas
-    Cálculo de defensa: 60% defensa de defensas  + 40% media de porteros
+    Cálculo de ataque:  40% tiro DEL + 25% pase MED + 20% velocidad DEL + 15% regate MED
+    Cálculo de defensa: 45% defensa DEF + 30% media POR + 15% físico DEF + 10% velocidad DEF
     Cálculo de media:   media global de todos los jugadores
 
     Si el equipo está vacío, devuelve valores neutros (50).
@@ -343,8 +343,18 @@ def _calcular_fuerza(jugadores, chunk_num=0, factor_forma=1.0):
         return sum(j[stat] for j in lista) / len(lista) if lista else 50
 
     factor  = factor_fatiga * factor_numerico * factor_forma
-    ataque  = (media_stat(delanteros, 'tiro') * 0.6 + media_stat(medios, 'pase') * 0.4) * factor
-    defensa = (media_stat(defensas, 'defensa') * 0.6 + media_stat(porteros, 'media') * 0.4) * factor
+    ataque  = (
+        media_stat(delanteros, 'tiro')      * 0.40 +
+        media_stat(medios,     'pase')      * 0.25 +
+        media_stat(delanteros, 'velocidad') * 0.20 +
+        media_stat(medios,     'regate')    * 0.15
+    ) * factor
+    defensa = (
+        media_stat(defensas, 'defensa')   * 0.45 +
+        media_stat(porteros, 'media')     * 0.30 +
+        media_stat(defensas, 'fisico')    * 0.15 +
+        media_stat(defensas, 'velocidad') * 0.10
+    ) * factor
     media   = (sum(j['media'] for j in jugadores) / len(jugadores)) * factor
     return {'ataque': ataque, 'defensa': defensa, 'media': media}
 
